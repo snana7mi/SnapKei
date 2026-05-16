@@ -1,14 +1,14 @@
-# SharedAccountKit & SnapKei Settings Redesign — Design Spec
+# LLMGatewayKit & SnapKei Settings Redesign — Design Spec
 
 **Date:** 2026-05-16
-**Status:** Awaiting user review
-**Scope:** Multi-repo (SnapKei + ConchTalk + new SharedAccountKit package + llm-gateway-back is unchanged)
+**Status:** Approved by user; ready for implementation plan
+**Scope:** Multi-repo (SnapKei + ConchTalk + new LLMGatewayKit open-source package + llm-gateway-back is unchanged)
 
 ---
 
 ## 1. Goal
 
-Bring SnapKei's Settings page up to parity with ConchTalk's: Apple Sign In, profile, usage display, shared paid subscription, and R1 cloud sync. Do this by extracting the relevant ConchTalk modules into a new local Swift Package (`SharedAccountKit`) that both apps depend on, so the implementation is shared and maintained in one place.
+Bring SnapKei's Settings page up to parity with ConchTalk's: Apple Sign In, profile, usage display, shared paid subscription, and R1 cloud sync. Do this by extracting the relevant ConchTalk modules into a new local Swift Package (`LLMGatewayKit`) that both apps depend on, so the implementation is shared and maintained in one place.
 
 The two apps share **paid membership and usage quota** at the user level (keyed on Apple sub), because the gateway backend (`llm-gateway-back`) already stores `users.tier` and `usage_ledger` per-user (not per-app). Buying Pro in either app unlocks Pro in both.
 
@@ -16,7 +16,7 @@ The two apps share **paid membership and usage quota** at the user level (keyed 
 
 - E2E encryption for SnapKei sync (chose plaintext-on-server — see §6.4)
 - Server-side report generation from synced ledger data (future work)
-- A formal published version of `SharedAccountKit` on a public registry (it lives as a local-path Swift Package; promoting it later is a separate decision)
+- Listing the package on a discoverability site like Swift Package Index (the package will be public on GitHub and consumable via SwiftPM, but explicit registry submission is out of scope)
 - Migrating the host of either app to a monorepo
 
 ## 3. High-Level Architecture
@@ -24,39 +24,79 @@ The two apps share **paid membership and usage quota** at the user level (keyed 
 ### 3.1 Repository layout
 
 ```
-~/workspace/
-├── SharedAccountKit/                          🆕 new local Swift Package
+github.com/snana7mi/
+├── LLMGatewayKit                            🆕 new public open-source repo
 │   ├── Package.swift
-│   ├── Sources/SharedAccountKit/
-│   │   ├── Config/SharedAccountKitConfig.swift
-│   │   ├── Auth/                              # AuthService, AuthError, AccountUser, KeychainTokenStore, AppleSignInBridge
-│   │   ├── Subscription/                      # SubscriptionService, PurchaseState
-│   │   ├── Sync/                              # SyncEngine, SyncAPIClient, SyncEnvelope,
-│   │   │                                      # SyncPayloadCodec, IdentityPayloadCodec,
-│   │   │                                      # SyncChangeCollecting, SyncMerging, SyncState
-│   │   ├── Models/                            # UsageInfo, UsageBreakdown
-│   │   └── UI/                                # ProfileView, PaywallView, PaywallViewModel,
-│   │                                          # RainbowAvatarBorder
-│   └── Tests/SharedAccountKitTests/
+│   ├── README.md                             # usage docs, integration sample
+│   ├── LICENSE                               # MIT (matches both apps)
+│   ├── Sources/LLMGatewayKit/
+│   │   ├── Config/LLMGatewayKitConfig.swift
+│   │   ├── Auth/                             # AuthService, AuthError, AccountUser,
+│   │   │                                     # KeychainTokenStore, AppleSignInBridge
+│   │   ├── Subscription/                     # SubscriptionService, PurchaseState
+│   │   ├── Sync/                             # SyncEngine, SyncAPIClient, SyncEnvelope,
+│   │   │                                     # SyncPayloadCodec, IdentityPayloadCodec,
+│   │   │                                     # SyncChangeCollecting, SyncMerging,
+│   │   │                                     # SyncState, SyncStatusObserver
+│   │   ├── Models/                           # UsageInfo, UsageBreakdown
+│   │   └── UI/                               # ProfileView, PaywallView, PaywallViewModel,
+│   │                                         # RainbowAvatarBorder
+│   └── Tests/LLMGatewayKitTests/
 │
-├── conchtalk/                                 (P3 migrates to use the package)
-└── SnapKei/                                   (P2 adopts the package + new Settings UI)
+├── snapkei                                   (P2 adopts via git URL dependency)
+└── conchtalk                                 (P3 migrates via git URL dependency)
+```
+
+### 3.1.1 Distribution model
+
+The package is published as a **public open-source GitHub repo** under `github.com/snana7mi/LLMGatewayKit` (MIT). Both apps consume it via versioned SwiftPM git-URL dependencies, so anyone who clones either app from GitHub can run `xcodebuild` without additional setup.
+
+**Consumption in app `Package.swift` / Xcode project:**
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/snana7mi/LLMGatewayKit", from: "0.1.0"),
+],
+targets: [
+    .target(name: "SnapKei", dependencies: [
+        .product(name: "LLMGatewayKit", package: "LLMGatewayKit"),
+    ])
+]
+```
+
+**Maintainer dev convenience:** During active package development, the maintainer iterates faster by temporarily switching to a local path. Two supported workflows:
+
+1. **Quick switch in Xcode**: File → Add Package Dependencies → "Add Local…" pointing at `~/workspace/LLMGatewayKit`. Xcode prefers the local override over the git URL while it exists. Remove the override before committing/pushing.
+2. **Branch dependency for in-flight features**: temporarily change `from: "0.1.0"` to `branch: "main"` on a feature branch, push, observe, then bump and tag for release. Don't merge `branch:` dependencies into a release tag.
+
+Tagged releases on the package repo (semver, starting at `0.1.0`) gate which version each app pins to. App PRs that bump the package dependency call out the corresponding package tag in the PR body.
+
+**Versioning:** semver. Breaking changes to the public API (signature change, removal) → minor bump until 1.0.0, then major. Both apps update in lockstep where a breaking change is introduced.
+
+### 3.1.2 Local workspace layout (for the maintainer)
+
+```
+~/workspace/
+├── LLMGatewayKit/                            cloned from github.com/snana7mi/LLMGatewayKit
+├── conchtalk/                                cloned from github.com/snana7mi/conchtalk
+├── snapkei/                                  cloned from github.com/snana7mi/snapkei (TBD: repo not yet pushed)
+└── llm-gateway-back/                         cloned from the gateway repo
 ```
 
 ### 3.2 Phased delivery
 
 | Phase | Work | Repo | Ships with |
 |---|---|---|---|
-| **P1 Build package** | Create `SharedAccountKit`; copy-and-parameterize code from ConchTalk; write minimal unit tests | `SharedAccountKit/` | P2 |
-| **P2 SnapKei adoption** | Add path dependency; implement `SnapKeiChangeCollector`/`Merger`; rebuild SettingsView in ConchTalk style | SnapKei | P1 |
-| **P3 ConchTalk migration** | Delete in-app duplicates; switch to package imports; one-shot keychain/UserDefaults key migration | conchtalk | Same plan |
+| **P1 Build package** | Create the `LLMGatewayKit` repo on GitHub (MIT, README, CI green); copy-and-parameterize code from ConchTalk; write minimal unit tests; tag `0.1.0` | github.com/snana7mi/LLMGatewayKit | P2 |
+| **P2 SnapKei adoption** | Add git-URL dependency on `0.1.0`; implement `SnapKeiChangeCollector`/`Merger`; rebuild SettingsView in ConchTalk style | SnapKei | P1 |
+| **P3 ConchTalk migration** | Delete in-app duplicates; switch to git-URL dependency on `0.1.0`; one-shot keychain/UserDefaults key migration | conchtalk | Same plan |
 
 All three phases are committed together in this design. P3 includes data-migration safety for existing ConchTalk users.
 
 ### 3.3 Configuration boundary
 
 ```swift
-public struct SharedAccountKitConfig: Sendable {
+public struct LLMGatewayKitConfig: Sendable {
     public let baseURL: URL                       // "https://api.conch-talk.com" — shared gateway host
     public let entitlementID: String              // "pro" — shared across apps
     public let appDisplayName: String             // "SnapKei" | "ConchTalk"
@@ -77,7 +117,7 @@ public struct PaywallFeature: Sendable, Identifiable {
 App-side wiring example (SnapKei):
 
 ```swift
-let config = SharedAccountKitConfig(
+let config = LLMGatewayKitConfig(
     baseURL: URL(string: "https://api.conch-talk.com")!,
     entitlementID: "pro",
     appDisplayName: "SnapKei",
@@ -114,7 +154,7 @@ The `users` table is keyed by `apple_sub`, so the same Apple ID maps to the same
 
 The RevenueCat webhook reads `event.app_user_id` (= Apple sub) — it is **App-agnostic**, so renaming the entitlement does not require any webhook change.
 
-## 5. AuthService (`SharedAccountKit/Auth/`)
+## 5. AuthService (`LLMGatewayKit/Auth/`)
 
 ### 5.1 Public API
 
@@ -127,7 +167,7 @@ public final class AuthService {
     public private(set) var cachedAvatarData: Data?
     public var cachedAppleSub: String? { get }
 
-    public init(config: SharedAccountKitConfig, keychain: KeychainTokenStore = .standard)
+    public init(config: LLMGatewayKitConfig, keychain: KeychainTokenStore = .standard)
 
     public func restoreSession()
     public func authenticate(identityToken: Data, fullName: String?, appleSub: String) async throws
@@ -168,7 +208,7 @@ public enum AuthError: LocalizedError, Sendable {
 
 ### 5.2 Token storage
 
-Package-internal `KeychainTokenStore` owns three keychain accounts: `kit.accessToken`, `kit.refreshToken`, `kit.tokenExpiry`. Apple sub is held in `UserDefaults` (key `SharedAccountKit.cachedAppleSub`) — it is non-secret and used for RevenueCat App User ID restoration after a fresh launch.
+Package-internal `KeychainTokenStore` owns three keychain accounts: `kit.accessToken`, `kit.refreshToken`, `kit.tokenExpiry`. Apple sub is held in `UserDefaults` (key `LLMGatewayKit.cachedAppleSub`) — it is non-secret and used for RevenueCat App User ID restoration after a fresh launch.
 
 Access tokens are assumed to expire 15 minutes after issue; the store records the wall-clock expiry. `validAccessToken()` refreshes when the remaining lifetime is < 60s.
 
@@ -189,7 +229,7 @@ Callers that hit a 401 on an authenticated endpoint must call `refreshAccessToke
 - On 401: `try await authService.refreshAccessToken()` once, then retry; if still 401, throw `AIServiceError.proxySessionExpired`
 - The "first parse triggers SIWA" fallback is preserved: if `validAccessToken()` throws `.notLoggedIn`, `AIProxyService` calls a new helper `authService.authenticateInteractively()` that presents the system Sign-in-with-Apple sheet (uses the existing `AppleSignInService` internally, moved into the package as `Auth/AppleSignInBridge.swift`).
 
-## 6. CloudSync (`SharedAccountKit/Sync/`)
+## 6. CloudSync (`LLMGatewayKit/Sync/`)
 
 ### 6.1 Wire protocol (already defined by gateway)
 
@@ -363,7 +403,7 @@ struct SnapKeiMerger: SyncMerging {
 
 SwiftData migration plan strategy will be detailed in the implementation plan, but at minimum: both fields are added as optional with defaults, all repository write paths set `updatedAt = .now`, and `delete(...)` becomes a soft-delete that sets `deletedAt`.
 
-## 7. SubscriptionService (`SharedAccountKit/Subscription/`)
+## 7. SubscriptionService (`LLMGatewayKit/Subscription/`)
 
 ### 7.1 Public API
 
@@ -374,7 +414,7 @@ public final class SubscriptionService {
     public private(set) var displayPrice: String?
     public private(set) var purchaseState: PurchaseState
 
-    public init(authService: AuthService, config: SharedAccountKitConfig)
+    public init(authService: AuthService, config: LLMGatewayKitConfig)
 
     public func startListening()
     public func loadProducts() async
@@ -406,11 +446,11 @@ In the RevenueCat dashboard:
 
 SnapKei's IAPs are created in App Store Connect under SnapKei's own subscription group with the same pricing as ConchTalk's Pro products. Users can subscribe via either app; both lead to the same entitlement.
 
-## 8. UI in the Package (`SharedAccountKit/UI/`)
+## 8. UI in the Package (`LLMGatewayKit/UI/`)
 
 ### 8.1 `ProfileView`
 
-Public, takes `config: SharedAccountKitConfig`, `authService`, `subscriptionService`. Renders:
+Public, takes `config: LLMGatewayKitConfig`, `authService`, `subscriptionService`. Renders:
 
 - Avatar editing via `PhotosPicker`, uploads through `authService.uploadAvatar`. Compressed to ≤512px max side, JPEG.
 - Tier + Upgrade button (opens host's paywall via callback)
@@ -515,7 +555,7 @@ Sources/Data/Sync/SyncConstants.swift        →  ConchTalk-specific constants s
 
 ### 10.3 ConchTalkApp.swift edits
 
-Construct the `SharedAccountKitConfig` with ConchTalk's specific values (`appDisplayName: "ConchTalk"`, `companionAppNames: ["SnapKei"]`, ConchTalk's existing paywall feature list) and instantiate `AuthService`/`SubscriptionService`/`SyncEngine` from the package.
+Construct the `LLMGatewayKitConfig` with ConchTalk's specific values (`appDisplayName: "ConchTalk"`, `companionAppNames: ["SnapKei"]`, ConchTalk's existing paywall feature list) and instantiate `AuthService`/`SubscriptionService`/`SyncEngine` from the package.
 
 ### 10.4 One-shot data migrations
 
@@ -547,7 +587,7 @@ Tested by installing the existing public ConchTalk build, then upgrading to the 
 
 ## 11. Testing Strategy
 
-### 11.1 `SharedAccountKit` package unit tests
+### 11.1 `LLMGatewayKit` package unit tests
 
 - `AuthService`: mocked URLSession, verify token storage, single-flight refresh, 401 handling, logout state
 - `SubscriptionService`: mocked RC `Purchases` (via protocol wrapper inside the package), verify state machine, tier-sync polling
@@ -574,7 +614,8 @@ Tested by installing the existing public ConchTalk build, then upgrading to the 
 | Entitlement rename causes paid users to appear free briefly | Dual-attach during transition (§7.3) |
 | Auto-sync floods backend with tiny pushes during bulk import | 2s debounce + exponential backoff cap at 5min |
 | SnapKei's `updatedAt` migration on `JournalEntry`/`FixedAsset` breaks existing local data | Default backfill to "now" for existing rows; sync is opt-in so no data loss before user toggles it on |
-| Path-package dependency requires CI agents to have both repos cloned at the right paths | Documented in each repo's README; CI runs `git clone` for both into expected paths |
+| Package breaking changes ship to one app before the other catches up | Both apps pin to the same `from:` version; PRs bump the dependency in lockstep when an API change ships |
+| Maintainer accidentally commits a `branch:` or local-path dependency override into a release tag | Document in each app's `CONTRIBUTING.md`; a CI step greps `Package.resolved` for `branch:` and fails the release build |
 
 Open questions:
 
@@ -582,6 +623,9 @@ Open questions:
 
 ## 13. Operational Checklist (before P1+P2 ship)
 
+- [ ] GitHub repo `github.com/snana7mi/LLMGatewayKit` created (public, MIT)
+- [ ] Package repo CI green (Linux build for spec, macOS build for full integration)
+- [ ] Package tagged `0.1.0`
 - [ ] RevenueCat dashboard: SnapKei iOS App added under existing ConchTalk Project
 - [ ] RevenueCat: `"pro"` entitlement created; attached to ConchTalk's Pro products + SnapKei's new Pro products
 - [ ] App Store Connect: SnapKei IAP products created with matching pricing
