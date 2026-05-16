@@ -29,7 +29,7 @@ The two apps share **paid membership and usage quota** at the user level (keyed 
 │   ├── Package.swift
 │   ├── Sources/SharedAccountKit/
 │   │   ├── Config/SharedAccountKitConfig.swift
-│   │   ├── Auth/                              # AuthService, AuthError, AccountUser, KeychainTokenStore
+│   │   ├── Auth/                              # AuthService, AuthError, AccountUser, KeychainTokenStore, AppleSignInBridge
 │   │   ├── Subscription/                      # SubscriptionService, PurchaseState
 │   │   ├── Sync/                              # SyncEngine, SyncAPIClient, SyncEnvelope,
 │   │   │                                      # SyncPayloadCodec, IdentityPayloadCodec,
@@ -131,6 +131,9 @@ public final class AuthService {
 
     public func restoreSession()
     public func authenticate(identityToken: Data, fullName: String?, appleSub: String) async throws
+    /// Presents the system Sign in with Apple sheet and completes authentication.
+    /// Used by callers that need authentication on-demand (e.g., AIProxyService 401 fallback).
+    public func authenticateInteractively() async throws
     public func validAccessToken() async throws -> String
     public func refreshAccessToken() async throws       // single-flight
     public func logout() async
@@ -235,13 +238,19 @@ public actor SyncEngine {
                 merger: SyncMerging,
                 state: SyncState,
                 deviceID: String,
-                keyGeneration: Int = 1)
+                keyGeneration: Int = 1,
+                isEligible: @Sendable () async -> Bool)        // logged-in AND paid; engine no-ops otherwise
 
     public func syncNow() async throws -> SyncResult
     public func forceFullSync() async throws -> SyncResult
+    /// Deletes all remote sync data via DELETE /sync/data and clears the local push cursor.
+    /// Keeps local records and login state intact. Disables auto-sync until re-enabled.
     public func disableAndDeleteCloud() async throws
-    public func startAutoSync(repoChanges: AsyncStream<Void>)
+    public func startAutoSync(repoChanges: AsyncStream<Void>)  // listens; only fires when isEligible() returns true
     public func stopAutoSync()
+
+    /// AsyncStream that emits each SyncResult; consumed by SyncStatusObserver.
+    public var resultStream: AsyncStream<SyncResult> { get }
 }
 
 public struct SyncResult: Sendable {
@@ -251,6 +260,25 @@ public struct SyncResult: Sendable {
     public let success: Bool
     public let error: String?
     public let timestamp: Date
+}
+
+/// SyncState owns durable sync metadata in UserDefaults:
+/// - `isEnabled`: user toggle for cloud sync
+/// - `lastPushedAt` / `lastPulledAt`: cursors per user-id
+/// - `disabledByUserID`: when disabled via the UI, records which user disabled it
+///   so a fresh login by the same user does not auto-reenable
+public final class SyncState: Sendable {
+    public static let shared = SyncState()
+    // ...
+}
+
+/// Main-actor bridge that subscribes to SyncEngine.resultStream and exposes
+/// @Observable state for SwiftUI consumers (toasts, status indicators).
+@MainActor
+@Observable
+public final class SyncStatusObserver {
+    public private(set) var lastResult: SyncResult?
+    public init(engine: SyncEngine)
 }
 ```
 
@@ -274,7 +302,11 @@ ConchTalk keeps its existing E2E encryption: package adds `ConchtalkE2ECodec: Sy
 
 `SyncEnvelope.data` carries a `deletedAt: Date?` field in the JSON when the entity is deleted (rather than introducing a separate envelope type). `SnapKeiMerger` checks this field; if present, it removes the local record. Push does the same: `SnapKeiChangeCollector` emits envelopes for tombstoned entities (with the deletion timestamp populated in the JSON).
 
+This requires soft-delete on the SnapKei entities: `JournalEntry` and `FixedAsset` gain a `deletedAt: Date?` field. `ExpenseRepository.delete(...)` becomes a soft-delete (set `deletedAt = .now`, set `updatedAt = .now`). The repository's read paths filter out `deletedAt != nil` records. A separate background job (or app-launch sweep, scope TBD in plan) hard-deletes tombstones older than 90 days that have been confirmed pushed.
+
 ### 6.8 SnapKei collector/merger implementations
+
+`SyncCursorStore` is a thin UserDefaults wrapper that records `lastPushedAt: Date?` per user. It lives in `SnapKei/Data/Sync/SyncCursorStore.swift` and is reset on logout. (The package's `SyncState` records the user-facing toggle; the per-app collector tracks how much it has pushed.)
 
 ```swift
 struct SnapKeiChangeCollector: SyncChangeCollecting {
@@ -324,7 +356,12 @@ struct SnapKeiMerger: SyncMerging {
 
 `ExpenseRepository.upsertFromSync` checks `syncId`. If a local record exists with a newer `updatedAt`, the merge is skipped (LWW). Otherwise it overwrites or inserts.
 
-`updatedAt` is a new requirement on `JournalEntry` and `FixedAsset`: both must record their last-mutation timestamp. The migration adds a column (`@Attribute(.unique) updatedAt: Date`, defaulting to current date for existing rows).
+`updatedAt` and `deletedAt` are new requirements on `JournalEntry` and `FixedAsset`:
+
+- `updatedAt: Date` — set on insert and every mutation; existing rows default to current date during migration
+- `deletedAt: Date?` — `nil` for live records; set to deletion timestamp for tombstones
+
+SwiftData migration plan strategy will be detailed in the implementation plan, but at minimum: both fields are added as optional with defaults, all repository write paths set `updatedAt = .now`, and `delete(...)` becomes a soft-delete that sets `deletedAt`.
 
 ## 7. SubscriptionService (`SharedAccountKit/Subscription/`)
 
@@ -448,7 +485,7 @@ Remove the `onSignInWithApple` parameter and the "Apple でサインイン" butt
 
 ### 9.5 `SyncToastView` (new, SnapKei-side)
 
-Listens to `syncEngine` state changes; on each `SyncResult`, shows a brief top toast for 2s — green "同期完了", red "同期エラー: …", orange "古いデータが自動削除されました (n)".
+Listens to a `SyncStatusObserver` (from the package — `@MainActor @Observable` bridge over the actor's `resultStream`); on each `SyncResult`, shows a brief top toast for 2s — green "同期完了", red "同期エラー: …", orange "古いデータが自動削除されました (n)".
 
 ## 10. ConchTalk Migration (P3)
 
@@ -526,7 +563,7 @@ Tested by installing the existing public ConchTalk build, then upgrading to the 
 ### 11.3 Manual smoke tests (per release)
 
 - Sign in fresh, complete a purchase in sandbox, verify entitlement becomes active in both apps
-- Capture a receipt in SnapKei, observe automatic sync, sign in to ConchTalk on a second device → not applicable to ConchTalk; just verify SnapKei pulls down on second SnapKei device
+- Capture a receipt on SnapKei device A, observe automatic sync; sign in on SnapKei device B and verify the new entry arrives
 - Delete account → verify R2 sync data cleared (already wired in `/auth/account`)
 
 ## 12. Risks & Open Questions

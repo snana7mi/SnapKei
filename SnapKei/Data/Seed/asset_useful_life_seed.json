@@ -1,0 +1,9 @@
+[
+  { "code": "PC", "nameJa": "電子計算機（PC）", "nameZh": "电脑（PC）", "years": 4 },
+  { "code": "SERVER", "nameJa": "サーバー", "nameZh": "服务器", "years": 5 },
+  { "code": "SOFTWARE_INTERNAL", "nameJa": "ソフトウェア（自社利用）", "nameZh": "软件（自用）", "years": 5 },
+  { "code": "CAMERA", "nameJa": "カメラ", "nameZh": "相机", "years": 5 },
+  { "code": "FURNITURE", "nameJa": "事務机・椅子", "nameZh": "办公桌椅", "years": 8 },
+  { "code": "VEHICLE", "nameJa": "自動車（営業用以外）", "nameZh": "汽车（非营业）", "years": 6 },
+  { "code": "OTHER", "nameJa": "その他工具器具備品", "nameZh": "其他工具器具", "years": 5 }
+]
