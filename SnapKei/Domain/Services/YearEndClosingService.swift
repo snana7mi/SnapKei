@@ -92,7 +92,8 @@ public final class YearEndClosingService {
             context.insert(FiscalYearClosure(
                 fiscalYear: fiscalYear,
                 netIncomeAtClosing: pl.netIncome,
-                closedByDeviceId: deviceId
+                closedByDeviceId: deviceId,
+                syncId: FiscalYearClosure.deterministicSyncId(fiscalYear: fiscalYear)
             ))
         }
 
