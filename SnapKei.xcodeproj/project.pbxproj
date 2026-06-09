@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		9B1000022FB9000000000001 /* LLMGatewayKit in Frameworks */ = {isa = PBXBuildFile; productRef = 9B1000012FB9000000000001 /* LLMGatewayKit */; };
+		9B1000032FB9000000000001 /* LLMGatewayKit in Frameworks */ = {isa = PBXBuildFile; productRef = 9B1000012FB9000000000001 /* LLMGatewayKit */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		9B0000072FB88A3500337460 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -17,6 +22,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		AA00000000000000000000C1 /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
 		9B0000012FB88A3500337460 /* SnapKeiTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SnapKeiTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9BD1865E2FB88A3300337460 /* SnapKei.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SnapKei.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -39,6 +45,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9B1000032FB9000000000001 /* LLMGatewayKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -46,6 +53,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9B1000022FB9000000000001 /* LLMGatewayKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -55,6 +63,7 @@
 		9BD186552FB88A3300337460 = {
 			isa = PBXGroup;
 			children = (
+				AA00000000000000000000C1 /* Secrets.xcconfig */,
 				9BD186602FB88A3300337460 /* SnapKei */,
 				9B0000022FB88A3500337460 /* SnapKeiTests */,
 				9BD1865F2FB88A3300337460 /* Products */,
@@ -91,6 +100,7 @@
 			);
 			name = SnapKeiTests;
 			packageProductDependencies = (
+				9B1000012FB9000000000001 /* LLMGatewayKit */,
 			);
 			productName = SnapKeiTests;
 			productReference = 9B0000012FB88A3500337460 /* SnapKeiTests.xctest */;
@@ -113,6 +123,7 @@
 			);
 			name = SnapKei;
 			packageProductDependencies = (
+				9B1000012FB9000000000001 /* LLMGatewayKit */,
 			);
 			productName = SnapKei;
 			productReference = 9BD1865E2FB88A3300337460 /* SnapKei.app */;
@@ -138,14 +149,19 @@
 				};
 			};
 			buildConfigurationList = 9BD186592FB88A3300337460 /* Build configuration list for PBXProject "SnapKei" */;
-			developmentRegion = en;
+			developmentRegion = ja;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
+				ja,
+				"zh-Hans",
 				Base,
 			);
 			mainGroup = 9BD186552FB88A3300337460;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				9B1000002FB9000000000001 /* XCRemoteSwiftPackageReference "LLMGatewayKit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 9BD1865F2FB88A3300337460 /* Products */;
 			projectDirPath = "";
@@ -379,6 +395,7 @@
 		};
 		9BD1866A2FB88A3500337460 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = AA00000000000000000000C1 /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -388,13 +405,17 @@
 				DEVELOPMENT_TEAM = Z9VKH39WMD;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_GATEWAY_BASE_URL = "$(GATEWAY_BASE_URL)";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "領収書を撮影するためにカメラを使用します。";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "領収書画像を選択するために写真ライブラリにアクセスします。";
+				INFOPLIST_KEY_REVENUECAT_API_KEY = "$(REVENUECAT_API_KEY)";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -403,17 +424,22 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.cheung.SnapKei;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
 		9BD1866B2FB88A3500337460 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = AA00000000000000000000C1 /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -423,13 +449,17 @@
 				DEVELOPMENT_TEAM = Z9VKH39WMD;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_GATEWAY_BASE_URL = "$(GATEWAY_BASE_URL)";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "領収書を撮影するためにカメラを使用します。";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "領収書画像を選択するために写真ライブラリにアクセスします。";
+				INFOPLIST_KEY_REVENUECAT_API_KEY = "$(REVENUECAT_API_KEY)";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -438,12 +468,16 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.cheung.SnapKei;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};
@@ -478,6 +512,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		9B1000002FB9000000000001 /* XCRemoteSwiftPackageReference "LLMGatewayKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/snana7mi/LLMGatewayKit.git";
+			requirement = {
+				kind = exactVersion;
+				version = 0.1.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		9B1000012FB9000000000001 /* LLMGatewayKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9B1000002FB9000000000001 /* XCRemoteSwiftPackageReference "LLMGatewayKit" */;
+			productName = LLMGatewayKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 9BD186562FB88A3300337460 /* Project object */;
 }

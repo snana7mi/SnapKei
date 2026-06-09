@@ -20,6 +20,15 @@ SnapKei is an iOS app for Japanese sole proprietors that turns receipts and elec
 
 ## Development
 
+### First-time setup
+
+The project reads build secrets from an untracked `Secrets.xcconfig`:
+
+```bash
+cp Secrets.xcconfig.template Secrets.xcconfig
+# then fill in REVENUECAT_API_KEY (optional) - gateway URLs default to the public endpoint
+```
+
 Open the project in Xcode:
 
 ```bash
@@ -45,6 +54,8 @@ The D1 migration `0026_add_snapkei_gemma.sql` registers the SnapKei app and bind
 ## Disclaimer
 
 SnapKei is a bookkeeping assistance tool, not tax advice. Final tax treatment should be confirmed with a licensed tax professional or the tax office.
+
+Privacy policy: [docs/legal/privacy-policy.md](docs/legal/privacy-policy.md) · Support: [docs/legal/support.md](docs/legal/support.md)
 
 ## License
 

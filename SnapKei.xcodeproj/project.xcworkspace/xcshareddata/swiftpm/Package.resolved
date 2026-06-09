@@ -1,0 +1,24 @@
+{
+  "originHash" : "4af905a87d9ad8857bec77ce779b5bd4e7dc1ccc53820b3bf2458931b3865203",
+  "pins" : [
+    {
+      "identity" : "llmgatewaykit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/snana7mi/LLMGatewayKit.git",
+      "state" : {
+        "revision" : "1375b3c10269dfdbbe3a9e0591cbc54dc1ccc62b",
+        "version" : "0.1.2"
+      }
+    },
+    {
+      "identity" : "purchases-ios-spm",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/RevenueCat/purchases-ios-spm.git",
+      "state" : {
+        "revision" : "6b95744e70f1edc43f89f2b522b0832ddfdd41a1",
+        "version" : "5.73.0"
+      }
+    }
+  ],
+  "version" : 3
+}
