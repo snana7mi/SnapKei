@@ -210,7 +210,10 @@ private struct BalanceSheetReportView: View {
             Section("負債・純資産") {
                 ForEach(report.liabilityLines) { Text("\($0.accountName)  ¥\($0.closing)") }
                 Text("事業主借  ¥\(report.ownerLoanClosing)")
-                Text("元入金  ¥\(report.capitalOpening)")
+                Text("元入金  ¥\(report.capitalClosing)")
+                if report.otherEquityClosing != 0 {
+                    Text("その他純資産  ¥\(report.otherEquityClosing)")
+                }
                 Text("当期所得  ¥\(report.netIncome)")
                 Text("合計  ¥\(report.liabilityEquityTotal)").font(.headline)
             }

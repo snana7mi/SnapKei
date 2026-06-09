@@ -62,10 +62,22 @@ struct BalanceSheetServiceTests {
         #expect(report.assetLines.first { $0.accountCode == "1710" }?.closing == -30_000)
         #expect(report.ownerDrawClosing == 6_000)
         #expect(report.ownerLoanClosing == 251_000)
-        #expect(report.capitalOpening == 100_000)
+        #expect(report.capitalClosing == 100_000)
         #expect(report.netIncome == 75_000)
         #expect(report.assetTotal == 426_000)
         #expect(report.liabilityEquityTotal == 426_000)
+        #expect(report.isBalanced)
+    }
+
+    @Test func report_foldsUnknownEquityAccount_intoTotal_andStaysBalanced() {
+        var accts = accounts
+        accts.append(account("3310", "準備金", .equity))
+        // ¥150,000 cash funded by ¥100,000 元入金 + ¥50,000 準備金 (a non-standard equity account).
+        let openings = ["1110": 150_000, "3110": -100_000, "3310": -50_000]
+        let report = BalanceSheetService.report(fiscalYear: 2026, entries: [], openingBalances: openings, accounts: accts)
+        #expect(report.otherEquityClosing == 50_000)
+        #expect(report.assetTotal == 150_000)
+        #expect(report.liabilityEquityTotal == 150_000)
         #expect(report.isBalanced)
     }
 
