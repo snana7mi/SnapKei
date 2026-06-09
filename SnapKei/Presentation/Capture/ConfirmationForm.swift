@@ -21,6 +21,8 @@ public struct ConfirmationForm: View {
     @State private var creditAccountCode = "3210"
     @State private var invoiceRegistrationNumber = ""
     @State private var businessAllocationRate = 1.0
+    @State private var businessAllocationPercentText = "100"
+    @FocusState private var allocationFieldFocused: Bool
 
     public init(
         draft: Binding<ReceiptDraft>,
@@ -91,8 +93,27 @@ public struct ConfirmationForm: View {
             }
 
             Section("家事按分") {
-                Slider(value: $businessAllocationRate, in: 0...1, step: 0.1)
-                Text("\(Int(businessAllocationRate * 100))%")
+                HStack {
+                    Text("業務割合")
+                    Spacer()
+                    TextField("", text: $businessAllocationPercentText)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                        .focused($allocationFieldFocused)
+                        .frame(width: 56)
+                        .onChange(of: businessAllocationPercentText) { _, newValue in
+                            let filtered = newValue.filter(\.isNumber)
+                            if filtered != newValue {
+                                businessAllocationPercentText = filtered
+                            }
+                        }
+                        .onChange(of: allocationFieldFocused) { _, focused in
+                            if !focused { commitAllocationPercent() }
+                        }
+                        .onSubmit(commitAllocationPercent)
+                    Text("%")
+                        .foregroundStyle(.secondary)
+                }
                 if businessAllocationRate < 1, let amount = Int(amountIncludingTaxText) {
                     Text("仕訳計上額: ¥\(Int(Double(amount) * businessAllocationRate))")
                         .font(.footnote)
@@ -114,6 +135,9 @@ public struct ConfirmationForm: View {
         }
         .navigationTitle("仕訳確認")
         .onAppear(perform: applyDraftOnce)
+        .onChange(of: debitAccountCode) { _, newCode in
+            applyAllocationDefault(forDebitCode: newCode)
+        }
     }
 
     private var isValid: Bool {
@@ -139,9 +163,23 @@ public struct ConfirmationForm: View {
             debitAccountCode = firstExpenseCode() ?? debitAccountCode
         }
         creditAccountCode = firstCreditCode() ?? creditAccountCode
+        applyAllocationDefault(forDebitCode: debitAccountCode)
+    }
+
+    private func applyAllocationDefault(forDebitCode code: String) {
+        guard let account = accounts.first(where: { $0.code == code }) else { return }
+        businessAllocationRate = account.defaultBusinessAllocationRate
+        businessAllocationPercentText = String(Int((account.defaultBusinessAllocationRate * 100).rounded()))
+    }
+
+    private func commitAllocationPercent() {
+        let clamped = max(0, min(100, Int(businessAllocationPercentText) ?? 0))
+        businessAllocationPercentText = String(clamped)
+        businessAllocationRate = Double(clamped) / 100.0
     }
 
     private func save() {
+        commitAllocationPercent()
         guard let amount = Int(amountIncludingTaxText) else { return }
         let rate = taxCategory.taxRate
         let amountExcludingTax: Int
@@ -157,9 +195,10 @@ public struct ConfirmationForm: View {
             total = amount + consumptionTax
         }
 
-        let allocatedTotal = Int((Double(total) * businessAllocationRate).rounded(.down))
-        let allocatedExcludingTax = Int((Double(amountExcludingTax) * businessAllocationRate).rounded(.down))
-        let allocatedTax = Int((Double(consumptionTax) * businessAllocationRate).rounded(.down))
+        let allocation = TaxAllocation.allocate(total: total, excludingTax: amountExcludingTax, rate: businessAllocationRate)
+        let allocatedTotal = allocation.total
+        let allocatedExcludingTax = allocation.excludingTax
+        let allocatedTax = allocation.tax
         let qualified = invoiceRegistrationNumber.hasPrefix("T") && invoiceRegistrationNumber.count == 14
 
         onSave(JournalEntry(

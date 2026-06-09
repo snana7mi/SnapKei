@@ -3,7 +3,7 @@ import Foundation
 public struct AnthropicFormatStrategy: AIFormatStrategy {
     public let format: APIFormat = .anthropic
 
-    public init() {}
+    public nonisolated init() {}
 
     public func makeRequest(config: AIRequestConfig, apiKey: String, imageData: Data, mimeType: String) throws -> URLRequest {
         var request = URLRequest(url: config.endpoint, timeoutInterval: config.timeoutSeconds)

@@ -17,7 +17,7 @@ private final class StaticStrategy: AIFormatStrategy, @unchecked Sendable {
 @Suite("ClaudeVisionService")
 struct ClaudeVisionServiceTests {
     @Test func missingApiKeyThrows() async throws {
-        let service = ClaudeVisionService(apiKeyProvider: { "" }, strategy: StaticStrategy())
+        let service = ClaudeVisionService(apiKeyProvider: { "" }, strategyProvider: { StaticStrategy() })
         await #expect(throws: AIServiceError.missingAPIKey) {
             try await service.parseReceipt(imageData: Data(), mimeType: "image/jpeg")
         }

@@ -53,7 +53,9 @@ public struct ExpenseListView: View {
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button { showFilter = true } label: { Image(systemName: "line.3.horizontal.decrease.circle") }
+                    .accessibilityLabel("フィルタ")
                 Button { exportCSV(viewModel: viewModel) } label: { Image(systemName: "square.and.arrow.up") }
+                    .accessibilityLabel("CSV を共有")
             }
             ToolbarItem(placement: .bottomBar) {
                 Text("合計 ¥\(viewModel.totalAmount)")

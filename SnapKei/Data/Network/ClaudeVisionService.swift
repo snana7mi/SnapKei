@@ -3,24 +3,25 @@ import Foundation
 public final class ClaudeVisionService: ReceiptParser, @unchecked Sendable {
     private let apiKeyProvider: @Sendable () throws -> String
     private let configProvider: @Sendable () -> AIRequestConfig
-    private let strategy: AIFormatStrategy
+    private let strategyProvider: @Sendable () -> AIFormatStrategy
     private let session: URLSession
 
     public init(
         apiKeyProvider: @escaping @Sendable () throws -> String,
         configProvider: @escaping @Sendable () -> AIRequestConfig = { .anthropicDefault },
-        strategy: AIFormatStrategy = AnthropicFormatStrategy(),
+        strategyProvider: @escaping @Sendable () -> AIFormatStrategy = { AnthropicFormatStrategy() },
         session: URLSession = .shared
     ) {
         self.apiKeyProvider = apiKeyProvider
         self.configProvider = configProvider
-        self.strategy = strategy
+        self.strategyProvider = strategyProvider
         self.session = session
     }
 
     public func parseReceipt(imageData: Data, mimeType: String) async throws -> ReceiptDraft {
         let apiKey = try apiKeyProvider()
         guard !apiKey.isEmpty else { throw AIServiceError.missingAPIKey }
+        let strategy = strategyProvider()
         let request = try strategy.makeRequest(config: configProvider(), apiKey: apiKey, imageData: imageData, mimeType: mimeType)
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw AIServiceError.invalidResponse("missing HTTP response") }
