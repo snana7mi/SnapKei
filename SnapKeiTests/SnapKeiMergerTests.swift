@@ -151,14 +151,17 @@ struct SnapKeiMergerTests {
     }
 
     @MainActor
-    @Test func apply_openingBalance_sameFiscalYearAccountDifferentSyncId_mergesToOneRow() async throws {
+    @Test func apply_openingBalance_twoDevicesSameNaturalKey_mergeToOneRow() async throws {
         let context = try makeContext()
         let merger = SnapKeiMerger(context: context)
         let older = Date()
         let newer = older.addingTimeInterval(60)
 
-        let first = OpeningBalance(fiscalYear: 2026, accountCode: "1110", amount: 1, syncId: UUID(), updatedAt: older)
-        let second = OpeningBalance(fiscalYear: 2026, accountCode: "1110", amount: 2, syncId: UUID(), updatedAt: newer)
+        // Two devices independently create the FY2026/1110 opening — both derive the SAME syncId,
+        // so the merge collapses to a single row (no orphan).
+        let syncId = OpeningBalance.deterministicSyncId(fiscalYear: 2026, accountCode: "1110")
+        let first = OpeningBalance(fiscalYear: 2026, accountCode: "1110", amount: 1, syncId: syncId, updatedAt: older)
+        let second = OpeningBalance(fiscalYear: 2026, accountCode: "1110", amount: 2, syncId: syncId, updatedAt: newer)
         for opening in [first, second] {
             try await merger.apply(SyncEnvelope(
                 entityType: "OpeningBalance",
@@ -193,11 +196,14 @@ struct SnapKeiMergerTests {
     }
 
     @MainActor
-    @Test func apply_fiscalYearClosure_sameYearDifferentSyncId_mergesToOneRow() async throws {
+    @Test func apply_fiscalYearClosure_twoDevicesSameYear_mergeToOneRow() async throws {
         let context = try makeContext()
         let merger = SnapKeiMerger(context: context)
-        let older = FiscalYearClosure(fiscalYear: 2026, netIncomeAtClosing: 1, closedByDeviceId: "a", updatedAt: Date())
-        let newer = FiscalYearClosure(fiscalYear: 2026, netIncomeAtClosing: 2, closedByDeviceId: "b", updatedAt: older.updatedAt.addingTimeInterval(60))
+        // Both devices derive the same deterministic syncId for FY2026, so the newer one wins
+        // in place rather than orphaning a second server row.
+        let syncId = FiscalYearClosure.deterministicSyncId(fiscalYear: 2026)
+        let older = FiscalYearClosure(fiscalYear: 2026, netIncomeAtClosing: 1, closedByDeviceId: "a", syncId: syncId, updatedAt: Date())
+        let newer = FiscalYearClosure(fiscalYear: 2026, netIncomeAtClosing: 2, closedByDeviceId: "b", syncId: syncId, updatedAt: older.updatedAt.addingTimeInterval(60))
         for closure in [older, newer] {
             try await merger.apply(SyncEnvelope(
                 entityType: "FiscalYearClosure",

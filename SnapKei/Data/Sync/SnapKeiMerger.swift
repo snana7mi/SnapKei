@@ -157,13 +157,12 @@ public final class SnapKeiMerger: SyncMerging, @unchecked Sendable {
     }
 
     private func applyOpeningBalance(_ payload: OpeningBalancePayload) throws {
+        // Match on syncId only: syncId is derived deterministically from (fiscalYear, accountCode),
+        // so every device agrees on it. Never rewrite an existing row's identity (that would orphan
+        // a server row); the natural key is already encoded in the shared syncId.
         let syncId = payload.syncId
-        let fiscalYear = payload.fiscalYear
-        let accountCode = payload.accountCode
         let descriptor = FetchDescriptor<OpeningBalance>(
-            predicate: #Predicate {
-                $0.syncId == syncId || ($0.fiscalYear == fiscalYear && $0.accountCode == accountCode)
-            }
+            predicate: #Predicate { $0.syncId == syncId }
         )
         if let existing = try context.fetch(descriptor).first {
             guard existing.updatedAt <= payload.updatedAt else { return }
@@ -171,7 +170,6 @@ public final class SnapKeiMerger: SyncMerging, @unchecked Sendable {
             existing.accountCode = payload.accountCode
             existing.amount = payload.amount
             existing.isAutoRolled = payload.isAutoRolled
-            existing.syncId = payload.syncId
             existing.updatedAt = payload.updatedAt
             existing.deletedAt = payload.deletedAt
         } else if payload.deletedAt == nil {
@@ -189,10 +187,11 @@ public final class SnapKeiMerger: SyncMerging, @unchecked Sendable {
     }
 
     private func applyFiscalYearClosure(_ payload: FiscalYearClosurePayload) throws {
+        // syncId is deterministic from fiscalYear, so all devices agree; match on it alone and
+        // never rewrite identity. (fiscalYear is also @Attribute(.unique) locally.)
         let syncId = payload.syncId
-        let fiscalYear = payload.fiscalYear
         let descriptor = FetchDescriptor<FiscalYearClosure>(
-            predicate: #Predicate { $0.syncId == syncId || $0.fiscalYear == fiscalYear }
+            predicate: #Predicate { $0.syncId == syncId }
         )
         if let existing = try context.fetch(descriptor).first {
             guard existing.updatedAt <= payload.updatedAt else { return }
@@ -200,7 +199,6 @@ public final class SnapKeiMerger: SyncMerging, @unchecked Sendable {
             existing.closedAt = payload.closedAt
             existing.netIncomeAtClosing = payload.netIncomeAtClosing
             existing.closedByDeviceId = payload.closedByDeviceId
-            existing.syncId = payload.syncId
             existing.updatedAt = payload.updatedAt
             existing.deletedAt = payload.deletedAt
         } else if payload.deletedAt == nil {

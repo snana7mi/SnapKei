@@ -40,7 +40,8 @@ public final class OpeningBalanceStore {
                 fiscalYear: fiscalYear,
                 accountCode: accountCode,
                 amount: amount,
-                isAutoRolled: isAutoRolled
+                isAutoRolled: isAutoRolled,
+                syncId: OpeningBalance.deterministicSyncId(fiscalYear: fiscalYear, accountCode: accountCode)
             ))
         }
         try context.save()
