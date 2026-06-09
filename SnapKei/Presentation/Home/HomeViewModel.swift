@@ -9,11 +9,11 @@ public struct ControlRouteStatus: Sendable, Equatable {
     public var searchableLedger: Bool
 
     public var estimatedDeduction: Int {
-        if doubleEntryBookkeeping && amendmentHistoryEnabled && searchableLedger && hasFiledOptimalBookNotification && willUseEtax {
-            return 750_000
-        }
-        if doubleEntryBookkeeping && willUseEtax {
+        if doubleEntryBookkeeping && amendmentHistoryEnabled && searchableLedger && (hasFiledOptimalBookNotification || willUseEtax) {
             return 650_000
+        }
+        if doubleEntryBookkeeping && amendmentHistoryEnabled && searchableLedger {
+            return 550_000
         }
         if doubleEntryBookkeeping {
             return 100_000
@@ -26,13 +26,17 @@ public struct ControlRouteStatus: Sendable, Equatable {
         static let etax = "controlRoute.willUseEtax"
     }
 
-    public static func load(defaults: UserDefaults = .standard, hasEntries: Bool) -> ControlRouteStatus {
+    public static func load(
+        defaults: UserDefaults = .standard,
+        hasEntries: Bool,
+        hasAuditLog: Bool
+    ) -> ControlRouteStatus {
         ControlRouteStatus(
             hasFiledOptimalBookNotification: defaults.bool(forKey: Keys.filed),
             willUseEtax: defaults.bool(forKey: Keys.etax),
             doubleEntryBookkeeping: hasEntries,
-            amendmentHistoryEnabled: true,
-            searchableLedger: true
+            amendmentHistoryEnabled: hasAuditLog,
+            searchableLedger: hasEntries
         )
     }
 
@@ -65,7 +69,12 @@ public final class HomeViewModel {
 
     public func controlRouteStatus(defaults: UserDefaults = .standard) throws -> ControlRouteStatus {
         let entries = try repository.search(criteria: ExpenseSearchCriteria())
-        return ControlRouteStatus.load(defaults: defaults, hasEntries: !entries.isEmpty)
+        let auditLogCount = try repository.auditLogCount()
+        return ControlRouteStatus.load(
+            defaults: defaults,
+            hasEntries: !entries.isEmpty,
+            hasAuditLog: auditLogCount > 0
+        )
     }
 
     public func monthlySummary(year: Int, month: Int) throws -> MonthlySummary {
