@@ -19,4 +19,25 @@ public struct AIRequestConfig: Sendable, Equatable {
         endpoint: URL(string: "https://api.anthropic.com/v1/messages")!,
         model: "claude-3-5-sonnet-latest"
     )
+
+    public nonisolated static let openAIDefault = AIRequestConfig(
+        endpoint: URL(string: "https://api.openai.com/v1/chat/completions")!,
+        model: "gpt-4o-mini"
+    )
+
+    public nonisolated static func anthropic(model: String) -> AIRequestConfig {
+        let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        return AIRequestConfig(
+            endpoint: URL(string: "https://api.anthropic.com/v1/messages")!,
+            model: trimmed.isEmpty ? anthropicDefault.model : trimmed
+        )
+    }
+
+    public nonisolated static func openAI(model: String) -> AIRequestConfig {
+        let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        return AIRequestConfig(
+            endpoint: URL(string: "https://api.openai.com/v1/chat/completions")!,
+            model: trimmed.isEmpty ? openAIDefault.model : trimmed
+        )
+    }
 }

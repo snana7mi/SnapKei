@@ -2,19 +2,19 @@ import Foundation
 import Security
 
 public protocol SecretStore: Sendable {
-    func save(_ value: String, account: String) throws
-    func read(account: String) throws -> String?
-    func delete(account: String) throws
+    nonisolated func save(_ value: String, account: String) throws
+    nonisolated func read(account: String) throws -> String?
+    nonisolated func delete(account: String) throws
 }
 
 public final class KeychainService: SecretStore, @unchecked Sendable {
     private let service: String
 
-    public init(service: String = Bundle.main.bundleIdentifier ?? "com.cheung.SnapKei") {
+    public nonisolated init(service: String = Bundle.main.bundleIdentifier ?? "com.cheung.SnapKei") {
         self.service = service
     }
 
-    public func save(_ value: String, account: String) throws {
+    public nonisolated func save(_ value: String, account: String) throws {
         let data = Data(value.utf8)
         try delete(account: account)
         let query: [String: Any] = [
@@ -27,7 +27,7 @@ public final class KeychainService: SecretStore, @unchecked Sendable {
         guard status == errSecSuccess else { throw keychainError(status) }
     }
 
-    public func read(account: String) throws -> String? {
+    public nonisolated func read(account: String) throws -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -42,7 +42,7 @@ public final class KeychainService: SecretStore, @unchecked Sendable {
         return String(data: data, encoding: .utf8)
     }
 
-    public func delete(account: String) throws {
+    public nonisolated func delete(account: String) throws {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -54,7 +54,7 @@ public final class KeychainService: SecretStore, @unchecked Sendable {
         }
     }
 
-    private func keychainError(_ status: OSStatus) -> AIServiceError {
+    private nonisolated func keychainError(_ status: OSStatus) -> AIServiceError {
         AIServiceError.network("Keychain status \(status)")
     }
 }

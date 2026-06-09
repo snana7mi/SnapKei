@@ -14,7 +14,7 @@ private final class StubParser: ReceiptParser, @unchecked Sendable {
 struct AIRouterTests {
     @Test func routesToDirectParser() async throws {
         let router = AIRouter(
-            settingsProvider: { AISettings(aiChannel: .directApiKey, preferredFormat: .anthropic, proxyBaseURL: "", anthropicModel: "m") },
+            settingsProvider: { AISettings(aiChannel: .directApiKey, preferredFormat: .anthropic, proxyBaseURL: "", anthropicModel: "m", openAIModel: "o") },
             directParser: StubParser(name: "direct"),
             proxyParser: StubParser(name: "proxy")
         )
@@ -24,7 +24,7 @@ struct AIRouterTests {
 
     @Test func routesToProxyParser() async throws {
         let router = AIRouter(
-            settingsProvider: { AISettings(aiChannel: .builtInProxy, preferredFormat: .anthropic, proxyBaseURL: "", anthropicModel: "m") },
+            settingsProvider: { AISettings(aiChannel: .builtInProxy, preferredFormat: .anthropic, proxyBaseURL: "", anthropicModel: "m", openAIModel: "o") },
             directParser: StubParser(name: "direct"),
             proxyParser: StubParser(name: "proxy")
         )

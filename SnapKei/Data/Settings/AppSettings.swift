@@ -6,13 +6,15 @@ public struct AppSettings: Sendable, Equatable {
     public var ownInvoiceRegistrationNumber: String
     public var fiscalYearStartMonth: Int
     public var lateEntryThresholdDays: Int
+    public var hasCompletedOnboarding: Bool
 
     public static let `default` = AppSettings(
         businessName: "",
         ownerName: "",
         ownInvoiceRegistrationNumber: "",
         fiscalYearStartMonth: 1,
-        lateEntryThresholdDays: ComplianceConstants.defaultLateEntryThresholdDays
+        lateEntryThresholdDays: ComplianceConstants.defaultLateEntryThresholdDays,
+        hasCompletedOnboarding: false
     )
 
     public nonisolated init(
@@ -20,13 +22,15 @@ public struct AppSettings: Sendable, Equatable {
         ownerName: String,
         ownInvoiceRegistrationNumber: String,
         fiscalYearStartMonth: Int,
-        lateEntryThresholdDays: Int
+        lateEntryThresholdDays: Int,
+        hasCompletedOnboarding: Bool = false
     ) {
         self.businessName = businessName
         self.ownerName = ownerName
         self.ownInvoiceRegistrationNumber = ownInvoiceRegistrationNumber
         self.fiscalYearStartMonth = fiscalYearStartMonth
         self.lateEntryThresholdDays = lateEntryThresholdDays
+        self.hasCompletedOnboarding = hasCompletedOnboarding
     }
 
     private enum Keys {
@@ -35,6 +39,7 @@ public struct AppSettings: Sendable, Equatable {
         nonisolated static let ownInvoiceRegistrationNumber = "app.ownInvoiceRegistrationNumber"
         nonisolated static let fiscalYearStartMonth = "app.fiscalYearStartMonth"
         nonisolated static let lateEntryThresholdDays = "app.lateEntryThresholdDays"
+        nonisolated static let hasCompletedOnboarding = "app.hasCompletedOnboarding"
     }
 
     public nonisolated static func load(defaults: UserDefaults = .standard) -> AppSettings {
@@ -45,7 +50,8 @@ public struct AppSettings: Sendable, Equatable {
             ownerName: defaults.string(forKey: Keys.ownerName) ?? "",
             ownInvoiceRegistrationNumber: defaults.string(forKey: Keys.ownInvoiceRegistrationNumber) ?? "",
             fiscalYearStartMonth: storedFy >= 1 && storedFy <= 12 ? storedFy : 1,
-            lateEntryThresholdDays: storedTh > 0 ? storedTh : ComplianceConstants.defaultLateEntryThresholdDays
+            lateEntryThresholdDays: storedTh > 0 ? storedTh : ComplianceConstants.defaultLateEntryThresholdDays,
+            hasCompletedOnboarding: defaults.bool(forKey: Keys.hasCompletedOnboarding)
         )
     }
 
@@ -55,5 +61,6 @@ public struct AppSettings: Sendable, Equatable {
         defaults.set(ownInvoiceRegistrationNumber, forKey: Keys.ownInvoiceRegistrationNumber)
         defaults.set(fiscalYearStartMonth, forKey: Keys.fiscalYearStartMonth)
         defaults.set(lateEntryThresholdDays, forKey: Keys.lateEntryThresholdDays)
+        defaults.set(hasCompletedOnboarding, forKey: Keys.hasCompletedOnboarding)
     }
 }

@@ -43,4 +43,14 @@ struct AppSettingsTests {
         let loaded = AppSettings.load(defaults: defaults)
         #expect(loaded.fiscalYearStartMonth == 1)
     }
+
+    @Test func hasCompletedOnboarding_defaultsFalse_andRoundTrips() {
+        let defaults = suiteDefaults()
+        #expect(AppSettings.load(defaults: defaults).hasCompletedOnboarding == false)
+
+        var settings = AppSettings.load(defaults: defaults)
+        settings.hasCompletedOnboarding = true
+        settings.save(defaults: defaults)
+        #expect(AppSettings.load(defaults: defaults).hasCompletedOnboarding == true)
+    }
 }

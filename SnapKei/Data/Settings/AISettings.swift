@@ -5,19 +5,22 @@ public struct AISettings: Sendable, Equatable {
     public var preferredFormat: APIFormat
     public var proxyBaseURL: String
     public var anthropicModel: String
+    public var openAIModel: String
 
     public nonisolated static let `default` = AISettings(
         aiChannel: .directApiKey,
         preferredFormat: .anthropic,
         proxyBaseURL: "",
-        anthropicModel: AIRequestConfig.anthropicDefault.model
+        anthropicModel: AIRequestConfig.anthropicDefault.model,
+        openAIModel: AIRequestConfig.openAIDefault.model
     )
 
-    public nonisolated init(aiChannel: AIChannel, preferredFormat: APIFormat, proxyBaseURL: String, anthropicModel: String) {
+    public nonisolated init(aiChannel: AIChannel, preferredFormat: APIFormat, proxyBaseURL: String, anthropicModel: String, openAIModel: String) {
         self.aiChannel = aiChannel
         self.preferredFormat = preferredFormat
         self.proxyBaseURL = proxyBaseURL
         self.anthropicModel = anthropicModel
+        self.openAIModel = openAIModel
     }
 
     private enum Keys {
@@ -25,6 +28,7 @@ public struct AISettings: Sendable, Equatable {
         nonisolated static let preferredFormat = "ai.preferredFormat"
         nonisolated static let proxyBaseURL = "ai.proxyBaseURL"
         nonisolated static let anthropicModel = "ai.anthropicModel"
+        nonisolated static let openAIModel = "ai.openAIModel"
     }
 
     public nonisolated static func load(defaults: UserDefaults = .standard) -> AISettings {
@@ -32,7 +36,8 @@ public struct AISettings: Sendable, Equatable {
             aiChannel: AIChannel(rawValue: defaults.string(forKey: Keys.aiChannel) ?? "") ?? .directApiKey,
             preferredFormat: APIFormat(rawValue: defaults.string(forKey: Keys.preferredFormat) ?? "") ?? .anthropic,
             proxyBaseURL: defaults.string(forKey: Keys.proxyBaseURL) ?? "",
-            anthropicModel: defaults.string(forKey: Keys.anthropicModel) ?? AIRequestConfig.anthropicDefault.model
+            anthropicModel: defaults.string(forKey: Keys.anthropicModel) ?? AIRequestConfig.anthropicDefault.model,
+            openAIModel: defaults.string(forKey: Keys.openAIModel) ?? AIRequestConfig.openAIDefault.model
         )
     }
 
@@ -41,5 +46,6 @@ public struct AISettings: Sendable, Equatable {
         defaults.set(preferredFormat.rawValue, forKey: Keys.preferredFormat)
         defaults.set(proxyBaseURL, forKey: Keys.proxyBaseURL)
         defaults.set(anthropicModel, forKey: Keys.anthropicModel)
+        defaults.set(openAIModel, forKey: Keys.openAIModel)
     }
 }
