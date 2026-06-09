@@ -151,6 +151,10 @@ public struct ConfirmationForm: View {
         didApplyDraft = true
         transactionDate = draft.transactionDate ?? Date()
         amountIncludingTaxText = String(draft.amountIncludingTax)
+        // draft.amountExcludingTax / draft.consumptionTax are intentionally NOT applied: the journal
+        // derives tax-excluded and consumption-tax amounts from the (editable) inclusive amount and
+        // tax rate in save(), kept consistent via TaxAllocation. The single-rate journal model has no
+        // place to store an independent AI-provided split.
         taxCategory = draft.taxCategory
         priceEntryMode = draft.priceEntryMode
         paymentMethod = draft.paymentMethod
