@@ -78,6 +78,40 @@ struct YearEndClosingServiceTests {
     }
 
     @MainActor
+    @Test func runDepreciation_writesSystemActivityLog() throws {
+        let (context, service) = try makeFixture()
+        context.insert(FixedAsset(
+            assetName: "PC",
+            assetCategoryCode: "PC",
+            acquisitionDate: date("2026-07-01"),
+            serviceStartDate: date("2026-07-01"),
+            acquisitionAmount: 240_000,
+            usefulLifeYears: 4,
+            treatment: .normalDepreciation,
+            businessAllocationRate: 0.8
+        ))
+        try context.save()
+
+        try service.runDepreciation(fiscalYear: 2026)
+
+        let logs = try context.fetch(FetchDescriptor<SystemActivityLog>())
+            .filter { $0.activityType == .depreciationPosting }
+        #expect(logs.count == 2) // deductible + owner-portion postings
+        #expect(logs.allSatisfy { $0.targetEntryId != nil })
+    }
+
+    @MainActor
+    @Test func reopen_logsUnlockPeriod() throws {
+        let (context, service) = try makeFixture()
+        try service.close(fiscalYear: 2026)
+        try service.reopen(fiscalYear: 2026, reason: "入力漏れ")
+        let logs = try context.fetch(FetchDescriptor<SystemActivityLog>())
+            .filter { $0.activityType == .unlockPeriod }
+        #expect(logs.count == 1)
+        #expect(logs.first?.reason == "入力漏れ")
+    }
+
+    @MainActor
     @Test func reopen_requiresReason_andDeletesClosure() throws {
         let (context, service) = try makeFixture()
         try service.close(fiscalYear: 2026)

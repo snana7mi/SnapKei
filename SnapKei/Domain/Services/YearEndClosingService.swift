@@ -43,24 +43,28 @@ public final class YearEndClosingService {
             let transactionDate = Calendar(identifier: .gregorian).date(from: DateComponents(year: fiscalYear, month: 12, day: 31)) ?? Date()
 
             if amount.deductible > 0 {
-                context.insert(depreciationEntry(
+                let entry = depreciationEntry(
                     fiscalYear: fiscalYear,
                     transactionDate: transactionDate,
                     asset: asset,
                     debit: AccountCode.depreciationExpense,
                     amount: amount.deductible,
                     description: "\(asset.assetName) 減価償却"
-                ))
+                )
+                context.insert(entry)
+                context.insert(depreciationLog(for: entry, fiscalYear: fiscalYear))
             }
             if amount.ownerPortion > 0 {
-                context.insert(depreciationEntry(
+                let entry = depreciationEntry(
                     fiscalYear: fiscalYear,
                     transactionDate: transactionDate,
                     asset: asset,
                     debit: AccountCode.ownerDraw,
                     amount: amount.ownerPortion,
                     description: "\(asset.assetName) 減価償却（家事分）"
-                ))
+                )
+                context.insert(entry)
+                context.insert(depreciationLog(for: entry, fiscalYear: fiscalYear))
             }
             asset.accumulatedDepreciation += amount.full
             asset.bookValue = max(0, asset.bookValue - amount.full)
@@ -121,7 +125,7 @@ public final class YearEndClosingService {
         try OpeningBalanceStore(context: context).deleteAutoRolled(fiscalYear: fiscalYear + 1)
         context.insert(SystemActivityLog(
             actorDeviceId: deviceId,
-            activityType: .editEntry,
+            activityType: .unlockPeriod,
             targetEntryId: nil,
             beforeSnapshot: nil,
             afterSnapshot: nil,
@@ -155,6 +159,15 @@ public final class YearEndClosingService {
             transactionDescription: description,
             relatedFixedAssetId: asset.syncId,
             sourceType: .depreciation
+        )
+    }
+
+    private func depreciationLog(for entry: JournalEntry, fiscalYear: Int) -> SystemActivityLog {
+        SystemActivityLog(
+            actorDeviceId: deviceId,
+            activityType: .depreciationPosting,
+            targetEntryId: entry.id,
+            reason: "減価償却自動計上 (FY\(fiscalYear))"
         )
     }
 

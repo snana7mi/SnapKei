@@ -8,6 +8,7 @@ public enum ActivityType: String, Codable, Sendable, CaseIterable {
     case unlockPeriod
     case fiscalYearTransition
     case aiParsing
+    case depreciationPosting
 }
 
 @Model
