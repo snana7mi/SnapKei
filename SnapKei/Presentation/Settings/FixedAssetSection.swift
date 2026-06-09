@@ -2,7 +2,11 @@ import SwiftData
 import SwiftUI
 
 public struct FixedAssetSection: View {
-    @Query(sort: \FixedAsset.acquisitionDate, order: .reverse) private var assets: [FixedAsset]
+    @Query(
+        filter: #Predicate<FixedAsset> { $0.deletedAt == nil },
+        sort: \FixedAsset.acquisitionDate,
+        order: .reverse
+    ) private var assets: [FixedAsset]
 
     public init() {}
 

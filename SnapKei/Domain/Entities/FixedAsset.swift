@@ -19,6 +19,8 @@ public final class FixedAsset {
     public var disposalDate: Date?
     public var disposalAmount: Int?
     public var syncId: UUID
+    public var updatedAt: Date
+    public var deletedAt: Date?
 
     public init(
         id: UUID = UUID(),
@@ -36,7 +38,9 @@ public final class FixedAsset {
         bookValue: Int? = nil,
         disposalDate: Date? = nil,
         disposalAmount: Int? = nil,
-        syncId: UUID = UUID()
+        syncId: UUID = UUID(),
+        updatedAt: Date = Date(),
+        deletedAt: Date? = nil
     ) {
         self.id = id
         self.assetName = assetName
@@ -54,6 +58,8 @@ public final class FixedAsset {
         self.disposalDate = disposalDate
         self.disposalAmount = disposalAmount
         self.syncId = syncId
+        self.updatedAt = updatedAt
+        self.deletedAt = deletedAt
     }
 
     public var depreciationMethod: DepreciationMethod {

@@ -13,6 +13,7 @@ final class MemoryExpenseRepository: ExpenseRepository, @unchecked Sendable {
     var entries: [JournalEntry]
     var created: [JournalEntry] = []
     var voided: [JournalEntry] = []
+    let changes: AsyncStream<Void> = AsyncStream { $0.finish() }
 
     init(entries: [JournalEntry] = []) {
         self.entries = entries
@@ -52,6 +53,8 @@ final class MemoryExpenseRepository: ExpenseRepository, @unchecked Sendable {
     }
 
     func nextEntryNumber(for fiscalYear: Int) throws -> Int { entries.count + 1 }
+
+    func auditLogCount() throws -> Int { created.count + voided.count }
 }
 
 struct StubReceiptParser: ReceiptParser {
@@ -126,9 +129,17 @@ struct UIServiceViewModelTests {
         suite.set(true, forKey: "controlRoute.hasFiledOptimalBookNotification")
         suite.set(true, forKey: "controlRoute.willUseEtax")
 
-        let route = ControlRouteStatus.load(defaults: suite, hasEntries: true)
+        let top = ControlRouteStatus.load(defaults: suite, hasEntries: true, hasAuditLog: true)
+        #expect(top.estimatedDeduction == 650_000)
 
-        #expect(route.estimatedDeduction == 750_000)
+        let middle = ControlRouteStatus.load(defaults: UserDefaults(suiteName: "snapkei.control.test.\(UUID().uuidString)")!, hasEntries: true, hasAuditLog: true)
+        #expect(middle.estimatedDeduction == 550_000)
+
+        let low = ControlRouteStatus.load(defaults: UserDefaults(suiteName: "snapkei.control.test.\(UUID().uuidString)")!, hasEntries: true, hasAuditLog: false)
+        #expect(low.estimatedDeduction == 100_000)
+
+        let empty = ControlRouteStatus.load(defaults: UserDefaults(suiteName: "snapkei.control.test.\(UUID().uuidString)")!, hasEntries: false, hasAuditLog: false)
+        #expect(empty.estimatedDeduction == 0)
     }
 
     @MainActor
@@ -141,6 +152,23 @@ struct UIServiceViewModelTests {
         try context.save()
 
         let data = try PDFReportService.renderProfitAndLoss(fiscalYear: 2026, context: context)
+
+        #expect(String(data: data.prefix(5), encoding: .ascii) == "%PDF-")
+        #expect(data.count > 1000)
+    }
+
+    @MainActor
+    @Test func balanceSheetPdfRendersValidPdfData() throws {
+        let container = try SnapKeiModelContainer.inMemory()
+        UIServiceTestContainerRetainer.retain(container)
+        let context = container.mainContext
+        AccountSeeder.seedIfNeeded(context: context)
+        try OpeningBalanceStore(context: context).set(fiscalYear: 2026, accountCode: "1110", amount: 100_000)
+        try OpeningBalanceStore(context: context).set(fiscalYear: 2026, accountCode: "3110", amount: -100_000)
+        context.insert(entry(amount: 1100, debit: "1110", credit: "4110"))
+        try context.save()
+
+        let data = try PDFReportService.renderBalanceSheet(fiscalYear: 2026, context: context)
 
         #expect(String(data: data.prefix(5), encoding: .ascii) == "%PDF-")
         #expect(data.count > 1000)

@@ -1,22 +1,20 @@
 import Foundation
+import LLMGatewayKit
 
 public final class AIProxyService: ReceiptParser, @unchecked Sendable {
     private static let appId = "snapkei"
 
     private let proxyBaseURLProvider: @Sendable () -> String
-    private let tokenStore: AuthTokenStore
-    private let signIn: AppleSignInAuthenticating
+    private let authService: AuthService
     private let session: URLSession
 
     public init(
         proxyBaseURLProvider: @escaping @Sendable () -> String,
-        tokenStore: AuthTokenStore = AuthTokenStore(),
-        signIn: AppleSignInAuthenticating,
+        authService: AuthService,
         session: URLSession = .shared
     ) {
         self.proxyBaseURLProvider = proxyBaseURLProvider
-        self.tokenStore = tokenStore
-        self.signIn = signIn
+        self.authService = authService
         self.session = session
     }
 
@@ -25,7 +23,13 @@ public final class AIProxyService: ReceiptParser, @unchecked Sendable {
     }
 
     private func callGateway(imageData: Data, mimeType: String, isRetry: Bool) async throws -> ReceiptDraft {
-        let accessToken = try await validAccessToken()
+        let accessToken: String
+        do {
+            accessToken = try await authService.validAccessToken()
+        } catch AuthError.notLoggedIn {
+            try await authService.authenticateInteractively()
+            accessToken = try await authService.validAccessToken()
+        }
         var request = try makeRequest(path: "/api/\(Self.appId)")
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -39,11 +43,7 @@ public final class AIProxyService: ReceiptParser, @unchecked Sendable {
             return try decodeChatCompletion(data)
         case 401:
             if isRetry { throw AIServiceError.proxySessionExpired }
-            if try await refreshAccessToken() {
-                return try await callGateway(imageData: imageData, mimeType: mimeType, isRetry: true)
-            }
-            try tokenStore.clearSession()
-            try await authenticateWithApple()
+            try await authService.refreshAccessToken()
             return try await callGateway(imageData: imageData, mimeType: mimeType, isRetry: true)
         case 429:
             return try throwRateLimited(data: data)
@@ -52,43 +52,6 @@ public final class AIProxyService: ReceiptParser, @unchecked Sendable {
         default:
             throw AIServiceError.invalidResponse("HTTP \(http.statusCode)")
         }
-    }
-
-    private func validAccessToken() async throws -> String {
-        if let stored = try tokenStore.load() {
-            return stored.accessToken
-        }
-        try await authenticateWithApple()
-        guard let stored = try tokenStore.load() else { throw AIServiceError.proxyAuthRequired }
-        return stored.accessToken
-    }
-
-    private func authenticateWithApple() async throws {
-        let nonce = NonceGenerator.makePair()
-        let result = try await signIn.authenticate(nonceRaw: nonce.raw, hashedNonce: nonce.hashedSHA256)
-        var request = try makeRequest(path: "/auth/apple")
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(AppleAuthRequest(identityToken: result.identityToken, nonce: nonce.raw, deviceName: "SnapKei iOS"))
-
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { throw AIServiceError.proxyAuthRequired }
-        let auth = try JSONDecoder().decode(AppleAuthResponse.self, from: data)
-        try tokenStore.save(accessToken: auth.accessToken, refreshToken: auth.refreshToken, appleUserId: result.appleUserId)
-    }
-
-    private func refreshAccessToken() async throws -> Bool {
-        guard let stored = try tokenStore.load() else { return false }
-        var request = try makeRequest(path: "/auth/refresh")
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(RefreshRequest(refreshToken: stored.refreshToken, deviceName: "SnapKei iOS"))
-
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return false }
-        let refreshed = try JSONDecoder().decode(RefreshResponse.self, from: data)
-        try tokenStore.updateAccessToken(refreshed.accessToken, refreshToken: refreshed.refreshToken)
-        return true
     }
 
     private func makeRequest(path: String) throws -> URLRequest {
@@ -176,28 +139,3 @@ private struct OpenAIChatCompletionResponse: Decodable {
     let choices: [Choice]
 }
 
-private struct AppleAuthRequest: Encodable {
-    let identityToken: String
-    let nonce: String
-    let deviceName: String
-}
-
-private struct AppleAuthResponse: Decodable {
-    struct User: Decodable {
-        let id: String
-        let tier: String?
-    }
-    let accessToken: String
-    let refreshToken: String
-    let user: User
-}
-
-private struct RefreshRequest: Encodable {
-    let refreshToken: String
-    let deviceName: String
-}
-
-private struct RefreshResponse: Decodable {
-    let accessToken: String
-    let refreshToken: String
-}

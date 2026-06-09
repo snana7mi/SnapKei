@@ -1,4 +1,5 @@
 import Foundation
+import LLMGatewayKit
 import Testing
 @testable import SnapKei
 
@@ -42,7 +43,7 @@ private final class GatewayURLProtocol: URLProtocol, @unchecked Sendable {
     nonisolated override func stopLoading() {}
 }
 
-@Suite("AIProxyService — llm-gateway-back")
+@Suite("AIProxyService — llm-gateway-back", .serialized)
 struct AIProxyServiceTests {
     private func makeSession() -> URLSession {
         let config = URLSessionConfiguration.ephemeral
@@ -50,8 +51,9 @@ struct AIProxyServiceTests {
         return URLSession(configuration: config)
     }
 
+    @MainActor
     @Test func authenticatesWithAppleThenCallsSnapKeiGatewayApp() async throws {
-        let tokenStore = AuthTokenStore(keychain: MemorySecretStore())
+        let tokenStore = InMemoryTokenStore()
         let session = makeSession()
         var paths: [String] = []
 
@@ -61,9 +63,13 @@ struct AIProxyServiceTests {
             if path == "/auth/apple" {
                 let body = requestBodyString(request)
                 #expect(body.contains("apple-token"))
-                #expect(body.contains("\"nonce\""))
                 return jsonResponse(for: request, status: 200, body: """
                 {"accessToken":"access-1","refreshToken":"refresh-1","user":{"id":"user-1","tier":"free"}}
+                """)
+            }
+            if path == "/account" {
+                return jsonResponse(for: request, status: 200, body: """
+                {"user":{"id":"user-1","tier":"free"}}
                 """)
             }
             if path == "/api/snapkei" {
@@ -78,21 +84,26 @@ struct AIProxyServiceTests {
 
         let service = AIProxyService(
             proxyBaseURLProvider: { "https://api.conch-talk.com" },
-            tokenStore: tokenStore,
-            signIn: MockAppleSignIn(result: AppleSignInResult(identityToken: "apple-token", appleUserId: "apple-user")),
+            authService: AuthService(
+                config: TestGatewayConfig.make(),
+                tokenStore: tokenStore,
+                appleBridge: MockAppleSignIn(result: AppleSignInResult(identityToken: "apple-token", appleUserId: "apple-user")),
+                session: session
+            ),
             session: session
         )
 
         let draft = try await service.parseReceipt(imageData: Data([1, 2, 3]), mimeType: "image/jpeg")
         #expect(draft.amountIncludingTax == 1100)
         #expect(draft.counterpartyName == "店")
-        #expect(paths == ["/auth/apple", "/api/snapkei"])
-        #expect(try tokenStore.load()?.refreshToken == "refresh-1")
+        #expect(paths == ["/auth/apple", "/account", "/api/snapkei"])
+        #expect(try tokenStore.loadRefreshToken() == "refresh-1")
     }
 
+    @MainActor
     @Test func refreshesAccessTokenOnGateway401ThenRetries() async throws {
-        let tokenStore = AuthTokenStore(keychain: MemorySecretStore())
-        try tokenStore.save(accessToken: "expired", refreshToken: "refresh-old", appleUserId: "apple-user")
+        let tokenStore = InMemoryTokenStore()
+        try tokenStore.save(accessToken: "expired", refreshToken: "refresh-old", expiry: Date().addingTimeInterval(1000))
         let session = makeSession()
         var apiCalls = 0
         var refreshCalls = 0
@@ -121,8 +132,16 @@ struct AIProxyServiceTests {
 
         let service = AIProxyService(
             proxyBaseURLProvider: { "https://api.conch-talk.com" },
-            tokenStore: tokenStore,
-            signIn: MockAppleSignIn(result: AppleSignInResult(identityToken: "apple-token", appleUserId: "apple-user")),
+            authService: {
+                let auth = AuthService(
+                    config: TestGatewayConfig.make(),
+                    tokenStore: tokenStore,
+                    appleBridge: MockAppleSignIn(result: AppleSignInResult(identityToken: "apple-token", appleUserId: "apple-user")),
+                    session: session
+                )
+                auth.restoreSession()
+                return auth
+            }(),
             session: session
         )
 
@@ -130,8 +149,22 @@ struct AIProxyServiceTests {
         #expect(draft.amountIncludingTax == 1100)
         #expect(apiCalls == 2)
         #expect(refreshCalls == 1)
-        #expect(try tokenStore.load()?.accessToken == "access-new")
-        #expect(try tokenStore.load()?.refreshToken == "refresh-new")
+        #expect(try tokenStore.loadAccessToken() == "access-new")
+        #expect(try tokenStore.loadRefreshToken() == "refresh-new")
+    }
+}
+
+private enum TestGatewayConfig {
+    static func make() -> LLMGatewayKitConfig {
+        LLMGatewayKitConfig(
+            baseURL: URL(string: "https://api.conch-talk.com")!,
+            entitlementID: "pro",
+            appDisplayName: "SnapKei",
+            companionAppNames: ["ConchTalk"],
+            revenueCatAPIKey: nil,
+            paywallFeatures: [],
+            deviceName: "Test"
+        )
     }
 }
 
