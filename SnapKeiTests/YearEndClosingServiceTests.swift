@@ -112,6 +112,39 @@ struct YearEndClosingServiceTests {
     }
 
     @MainActor
+    @Test func close_foldsOwnerBalancesIntoNextCapital() throws {
+        let (context, service) = try makeFixture()
+        // Income 110,000; an expense paid via 事業主借 (+11,000 owner loan). Net income 99,000.
+        context.insert(JournalEntry(
+            entryNumber: 1, fiscalYear: 2026, transactionDate: date("2026-01-01"),
+            debitAccountCode: "1110", creditAccountCode: "4110",
+            amountIncludingTax: 110_000, amountExcludingTax: 110_000, consumptionTax: 0,
+            taxCategory: .outOfScope, priceEntryMode: .taxIncluded, paymentMethod: .other,
+            counterpartyName: "x", transactionDescription: "売上", sourceType: .manual
+        ))
+        context.insert(JournalEntry(
+            entryNumber: 2, fiscalYear: 2026, transactionDate: date("2026-02-01"),
+            debitAccountCode: "5110", creditAccountCode: "3210",
+            amountIncludingTax: 11_000, amountExcludingTax: 11_000, consumptionTax: 0,
+            taxCategory: .outOfScope, priceEntryMode: .taxIncluded, paymentMethod: .ownerLoan,
+            counterpartyName: "y", transactionDescription: "通信費", sourceType: .manual
+        ))
+        let store = OpeningBalanceStore(context: context)
+        try store.set(fiscalYear: 2026, accountCode: "1110", amount: 100_000)
+        try store.set(fiscalYear: 2026, accountCode: "3110", amount: -100_000)
+
+        try service.close(fiscalYear: 2026)
+
+        let next = try OpeningBalanceStore(context: context).balances(fiscalYear: 2027)
+        // 元入金繰越 = 100,000 prior + 99,000 所得 + 11,000 事業主借 = 210,000 (stored debit-signed)
+        #expect(next["1110"] == 210_000)
+        #expect(next[AccountCode.capital] == -210_000)
+        #expect(next[AccountCode.ownerLoan] == nil)
+        #expect(next[AccountCode.ownerDraw] == nil)
+        #expect(next.values.reduce(0, +) == 0)
+    }
+
+    @MainActor
     @Test func reopen_requiresReason_andDeletesClosure() throws {
         let (context, service) = try makeFixture()
         try service.close(fiscalYear: 2026)

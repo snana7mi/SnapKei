@@ -13,14 +13,17 @@ public struct OnboardingView: View {
     }
 
     public var body: some View {
-        TabView(selection: $page) {
-            welcomePage.tag(0)
-            disclaimerPage.tag(1)
-            setupPage.tag(2)
+        // Button-driven (no swipe paging) so the disclaimer consent on page 1 cannot be skipped.
+        Group {
+            switch page {
+            case 0: welcomePage
+            case 1: disclaimerPage
+            default: setupPage
+            }
         }
-        .tabViewStyle(.page)
-        .indexViewStyle(.page(backgroundDisplayMode: .always))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemBackground))
+        .animation(.default, value: page)
     }
 
     private var welcomePage: some View {
