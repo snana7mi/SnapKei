@@ -88,8 +88,13 @@ public enum PDFReportService {
             "¥\(report.ownerLoanClosing)".draw(at: CGPoint(x: 450, y: y), withAttributes: body)
             y += 20
             "元入金".draw(at: CGPoint(x: 60, y: y), withAttributes: body)
-            "¥\(report.capitalOpening)".draw(at: CGPoint(x: 450, y: y), withAttributes: body)
+            "¥\(report.capitalClosing)".draw(at: CGPoint(x: 450, y: y), withAttributes: body)
             y += 20
+            if report.otherEquityClosing != 0 {
+                "その他純資産".draw(at: CGPoint(x: 60, y: y), withAttributes: body)
+                "¥\(report.otherEquityClosing)".draw(at: CGPoint(x: 450, y: y), withAttributes: body)
+                y += 20
+            }
             "当期所得".draw(at: CGPoint(x: 60, y: y), withAttributes: body)
             "¥\(report.netIncome)".draw(at: CGPoint(x: 450, y: y), withAttributes: body)
             y += 28

@@ -14,7 +14,8 @@ public struct BalanceSheetReport: Equatable, Sendable {
     public let liabilityLines: [BalanceSheetLine]
     public let ownerDrawClosing: Int
     public let ownerLoanClosing: Int
-    public let capitalOpening: Int
+    public let capitalClosing: Int
+    public let otherEquityClosing: Int
     public let netIncome: Int
     public let assetTotal: Int
     public let liabilityEquityTotal: Int
@@ -45,6 +46,8 @@ public enum BalanceSheetService {
         let relevantCodes = Set(openingBalances.keys).union(movement.keys)
         var assetLines: [BalanceSheetLine] = []
         var liabilityLines: [BalanceSheetLine] = []
+        var otherEquityClosing = 0
+        let handledEquity: Set<String> = [AccountCode.capital, AccountCode.ownerLoan, AccountCode.ownerDraw]
 
         for code in relevantCodes.sorted() {
             guard let account = accountByCode[code] else { continue }
@@ -56,17 +59,23 @@ public enum BalanceSheetService {
                 assetLines.append(BalanceSheetLine(accountCode: code, accountName: account.nameJa, opening: open, closing: close))
             case .liability:
                 liabilityLines.append(BalanceSheetLine(accountCode: code, accountName: account.nameJa, opening: -open, closing: -close))
-            case .equity, .revenue, .expense:
+            case .equity:
+                // 元入金 / 事業主借 / 事業主貸 are summarized separately below; any other equity
+                // account is folded in here so the balance equation stays complete.
+                if !handledEquity.contains(code) {
+                    otherEquityClosing += -close
+                }
+            case .revenue, .expense:
                 break
             }
         }
 
         let ownerDrawClosing = closing(AccountCode.ownerDraw)
         let ownerLoanClosing = -closing(AccountCode.ownerLoan)
-        let capitalOpening = -closing(AccountCode.capital)
+        let capitalClosing = -closing(AccountCode.capital)
         let assetTotal = assetLines.reduce(0) { $0 + $1.closing } + ownerDrawClosing
         let liabilityEquityTotal = liabilityLines.reduce(0) { $0 + $1.closing }
-            + ownerLoanClosing + capitalOpening + pl.netIncome
+            + ownerLoanClosing + capitalClosing + otherEquityClosing + pl.netIncome
 
         return BalanceSheetReport(
             fiscalYear: fiscalYear,
@@ -74,7 +83,8 @@ public enum BalanceSheetService {
             liabilityLines: liabilityLines,
             ownerDrawClosing: ownerDrawClosing,
             ownerLoanClosing: ownerLoanClosing,
-            capitalOpening: capitalOpening,
+            capitalClosing: capitalClosing,
+            otherEquityClosing: otherEquityClosing,
             netIncome: pl.netIncome,
             assetTotal: assetTotal,
             liabilityEquityTotal: liabilityEquityTotal,

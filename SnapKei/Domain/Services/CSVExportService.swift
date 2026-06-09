@@ -91,7 +91,10 @@ public enum CSVExportService {
             output.append("負債,\(escape(line.accountCode)),\(escape(line.accountName)),\(line.opening),\(line.closing)\n")
         }
         output.append("純資産,3210,事業主借,,\(report.ownerLoanClosing)\n")
-        output.append("純資産,3110,元入金,,\(report.capitalOpening)\n")
+        output.append("純資産,3110,元入金,,\(report.capitalClosing)\n")
+        if report.otherEquityClosing != 0 {
+            output.append("純資産,その他,その他純資産,,\(report.otherEquityClosing)\n")
+        }
         output.append("純資産,当期所得,,,\(report.netIncome)\n")
         output.append("負債・純資産合計,\(report.liabilityEquityTotal)\n")
         return Data(output.utf8)
