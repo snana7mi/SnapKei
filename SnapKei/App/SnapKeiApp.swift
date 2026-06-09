@@ -70,15 +70,19 @@ struct SnapKeiApp: App {
         self._syncStatusObserver = State(initialValue: SyncStatusObserver(engine: engine))
 
         let syncChanges = AsyncStream<Void> { continuation in
-            Task {
+            let repoTask = Task {
                 for await _ in repository.changes {
                     continuation.yield()
                 }
             }
-            Task {
+            let notifierTask = Task {
                 for await _ in SyncChangeNotifier.shared.changes {
                     continuation.yield()
                 }
+            }
+            continuation.onTermination = { _ in
+                repoTask.cancel()
+                notifierTask.cancel()
             }
         }
         Task {

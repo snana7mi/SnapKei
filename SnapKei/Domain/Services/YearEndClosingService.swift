@@ -194,8 +194,10 @@ public final class YearEndClosingService {
             }
         }
 
-        let netIncome = ProfitAndLossService.summary(entries: entries, accounts: accounts).netIncome
-        rolled[AccountCode.capital, default: 0] -= netIncome
+        // 事業主借/貸 collapse into 元入金 at the year boundary; 元入金 itself is derived by
+        // adjustCapitalToBalance below (from the carried asset/liability closings), which makes
+        // the net-income contribution implicit — so we must NOT also subtract it here.
+        rolled[AccountCode.capital] = nil
         rolled[AccountCode.ownerLoan] = nil
         rolled[AccountCode.ownerDraw] = nil
 
