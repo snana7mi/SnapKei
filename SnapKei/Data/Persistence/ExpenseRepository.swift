@@ -7,6 +7,8 @@ public protocol ExpenseRepository: Sendable {
     func void(_ entry: JournalEntry, reason: String?) throws
     func search(criteria: ExpenseSearchCriteria) throws -> [JournalEntry]
     func nextEntryNumber(for fiscalYear: Int) throws -> Int
+    func auditLogCount() throws -> Int
+    var changes: AsyncStream<Void> { get }
 }
 
 public struct ExpenseSearchCriteria: Sendable {
@@ -40,16 +42,24 @@ public struct ExpenseSearchCriteria: Sendable {
     }
 }
 
+public enum RepositoryError: Error, Equatable {
+    case fiscalYearClosed(Int)
+}
+
 public final class SwiftDataExpenseRepository: ExpenseRepository, @unchecked Sendable {
     private let context: ModelContext
     private let deviceId: String
+    public nonisolated let changes: AsyncStream<Void>
+    private let changesContinuation: AsyncStream<Void>.Continuation
 
     public init(context: ModelContext, deviceId: String) {
         self.context = context
         self.deviceId = deviceId
+        (self.changes, self.changesContinuation) = AsyncStream.makeStream()
     }
 
     public func create(_ entry: JournalEntry, reason: String? = nil) throws {
+        try ensureFiscalYearOpen(entry.fiscalYear)
         let assigned = try nextEntryNumber(for: entry.fiscalYear)
         entry.entryNumber = assigned
         entry.createdAt = Date()
@@ -68,9 +78,11 @@ public final class SwiftDataExpenseRepository: ExpenseRepository, @unchecked Sen
         )
         context.insert(log)
         try context.save()
+        changesContinuation.yield()
     }
 
     public func edit(_ entry: JournalEntry, applying change: () -> Void, reason: String?) throws {
+        try ensureFiscalYearOpen(entry.fiscalYear)
         let before = try? JSONEncoder().encode(JournalEntrySnapshot(from: entry))
         change()
         entry.updatedAt = Date()
@@ -86,9 +98,11 @@ public final class SwiftDataExpenseRepository: ExpenseRepository, @unchecked Sen
         )
         context.insert(log)
         try context.save()
+        changesContinuation.yield()
     }
 
     public func void(_ entry: JournalEntry, reason: String?) throws {
+        try ensureFiscalYearOpen(entry.fiscalYear)
         let before = try? JSONEncoder().encode(JournalEntrySnapshot(from: entry))
         entry.isVoided = true
         entry.updatedAt = Date()
@@ -103,6 +117,7 @@ public final class SwiftDataExpenseRepository: ExpenseRepository, @unchecked Sen
         )
         context.insert(log)
         try context.save()
+        changesContinuation.yield()
     }
 
     public func search(criteria: ExpenseSearchCriteria) throws -> [JournalEntry] {
@@ -150,6 +165,19 @@ public final class SwiftDataExpenseRepository: ExpenseRepository, @unchecked Sen
         descriptor.fetchLimit = 1
         let last = try context.fetch(descriptor).first
         return (last?.entryNumber ?? 0) + 1
+    }
+
+    public func auditLogCount() throws -> Int {
+        try context.fetchCount(FetchDescriptor<SystemActivityLog>())
+    }
+
+    private func ensureFiscalYearOpen(_ fiscalYear: Int) throws {
+        let descriptor = FetchDescriptor<FiscalYearClosure>(
+            predicate: #Predicate { $0.fiscalYear == fiscalYear && $0.deletedAt == nil }
+        )
+        if try context.fetchCount(descriptor) > 0 {
+            throw RepositoryError.fiscalYearClosed(fiscalYear)
+        }
     }
 }
 

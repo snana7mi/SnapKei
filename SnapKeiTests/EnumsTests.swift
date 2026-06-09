@@ -32,7 +32,7 @@ struct EnumsTests {
 
     @Test func depreciationMethodRawValues() {
         #expect(DepreciationMethod.straightLine.rawValue == "straightLine")
-        #expect(DepreciationMethod.decliningBalance.rawValue == "decliningBalance")
+        #expect(DepreciationMethod.allCases == [.straightLine])
     }
 
     @Test func aiChannelRawValues() {

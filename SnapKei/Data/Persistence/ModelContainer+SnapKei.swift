@@ -30,6 +30,8 @@ public enum SnapKeiModelContainer {
         AssetUsefulLife.self,
         JournalEntry.self,
         SystemActivityLog.self,
-        FixedAsset.self
+        FixedAsset.self,
+        OpeningBalance.self,
+        FiscalYearClosure.self
     ])
 }

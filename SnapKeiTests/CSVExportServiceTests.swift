@@ -51,4 +51,35 @@ struct CSVExportServiceTests {
         #expect(output.contains(#""Store, A""#))
         #expect(output.contains(#""He said ""hello""""#))
     }
+
+    @Test func exportTrialBalance_includesTotals() {
+        let report = TrialBalanceReport(
+            rows: [TrialBalanceRow(accountCode: "1110", accountName: "現金", openingBalance: 100, debitTotal: 20, creditTotal: 5, closingBalance: 115)],
+            totalDebit: 20,
+            totalCredit: 5,
+            openingImbalance: 0
+        )
+        let output = String(data: CSVExportService.exportTrialBalance(report), encoding: .utf8)!
+        #expect(output.contains("勘定科目コード,勘定科目名"))
+        #expect(output.contains("合計,,20,5"))
+    }
+
+    @Test func exportBalanceSheet_includesTotals() {
+        let report = BalanceSheetReport(
+            fiscalYear: 2026,
+            assetLines: [BalanceSheetLine(accountCode: "1110", accountName: "現金", opening: 100, closing: 200)],
+            liabilityLines: [],
+            ownerDrawClosing: 0,
+            ownerLoanClosing: 0,
+            capitalOpening: 200,
+            netIncome: 0,
+            assetTotal: 200,
+            liabilityEquityTotal: 200,
+            openingImbalance: 0
+        )
+        let output = String(data: CSVExportService.exportBalanceSheet(report), encoding: .utf8)!
+        #expect(output.contains("貸借対照表,2026"))
+        #expect(output.contains("資産合計,200"))
+        #expect(output.contains("負債・純資産合計,200"))
+    }
 }

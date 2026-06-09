@@ -46,7 +46,8 @@ public enum AssetTreatment: String, Codable, Sendable, CaseIterable {
 
 public enum DepreciationMethod: String, Codable, Sendable, CaseIterable {
     case straightLine
-    case decliningBalance
+    // 定率法 was removed pre-launch because it was previously computed as straight-line.
+    // Reintroduce only with a correct Japanese declining-balance implementation.
 }
 
 public enum AIChannel: String, Codable, Sendable, CaseIterable {

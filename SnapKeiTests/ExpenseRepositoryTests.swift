@@ -203,6 +203,65 @@ struct ExpenseRepositoryVoidTests {
     }
 }
 
+@Suite("ExpenseRepository — fiscal year lock", .serialized)
+struct ExpenseRepositoryLockTests {
+
+    @MainActor
+    private func makeRepo() throws -> (SwiftDataExpenseRepository, ModelContext) {
+        let container = try SnapKeiModelContainer.inMemory()
+        TestContainerRetainer.retain(container)
+        AccountSeeder.seedIfNeeded(context: container.mainContext)
+        let repo = SwiftDataExpenseRepository(context: container.mainContext, deviceId: "test-device")
+        return (repo, container.mainContext)
+    }
+
+    private func makeEntry(year: Int) -> JournalEntry {
+        JournalEntry(
+            entryNumber: 0,
+            fiscalYear: year,
+            transactionDate: Date(),
+            debitAccountCode: "5110",
+            creditAccountCode: "3210",
+            amountIncludingTax: 1_100,
+            amountExcludingTax: 1_000,
+            consumptionTax: 100,
+            taxCategory: .standard10,
+            priceEntryMode: .taxIncluded,
+            paymentMethod: .ownerLoan,
+            counterpartyName: "テスト商店",
+            transactionDescription: "テスト取引",
+            sourceType: .manual
+        )
+    }
+
+    @MainActor
+    @Test func create_inClosedYear_throws() throws {
+        let (repo, ctx) = try makeRepo()
+        ctx.insert(FiscalYearClosure(fiscalYear: 2026, netIncomeAtClosing: 0, closedByDeviceId: "test"))
+        try ctx.save()
+        #expect(throws: RepositoryError.fiscalYearClosed(2026)) {
+            try repo.create(makeEntry(year: 2026), reason: nil)
+        }
+        try repo.create(makeEntry(year: 2027), reason: nil)
+    }
+
+    @MainActor
+    @Test func editAndVoid_inClosedYear_throw() throws {
+        let (repo, ctx) = try makeRepo()
+        let entry = makeEntry(year: 2026)
+        try repo.create(entry, reason: nil)
+        ctx.insert(FiscalYearClosure(fiscalYear: 2026, netIncomeAtClosing: 0, closedByDeviceId: "test"))
+        try ctx.save()
+
+        #expect(throws: RepositoryError.fiscalYearClosed(2026)) {
+            try repo.edit(entry, applying: { entry.memo = "x" }, reason: nil)
+        }
+        #expect(throws: RepositoryError.fiscalYearClosed(2026)) {
+            try repo.void(entry, reason: nil)
+        }
+    }
+}
+
 @Suite("ExpenseRepository — search", .serialized)
 struct ExpenseRepositorySearchTests {
 
