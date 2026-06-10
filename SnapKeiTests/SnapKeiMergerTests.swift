@@ -83,6 +83,67 @@ struct SnapKeiMergerTests {
     }
 
     @MainActor
+    @Test func apply_journalEntry_syncsReceiptImagePath() async throws {
+        // 証憑のパスが同期されないと、他端末の詳細画面が「証憑なし」と誤表示する。
+        let context = try makeContext()
+        let merger = SnapKeiMerger(context: context)
+        let syncId = UUID()
+        var json = try #require(
+            JSONSerialization.jsonObject(
+                with: entryPayloadData(syncId: syncId, updatedAt: Date())
+            ) as? [String: Any]
+        )
+        json["receiptImagePath"] = "receipts/2026/x.jpg"
+        try await merger.apply(SyncEnvelope(
+            entityType: "JournalEntry",
+            entityID: syncId.uuidString,
+            modifiedAt: Date(),
+            data: try JSONSerialization.data(withJSONObject: json)
+        ))
+
+        let fetched = try context.fetch(FetchDescriptor<JournalEntry>())
+        #expect(fetched.first?.receiptImagePath == "receipts/2026/x.jpg")
+    }
+
+    @MainActor
+    @Test func apply_journalEntry_oldPayloadWithoutPath_keepsLocalPath() async throws {
+        // 旧バージョン端末の payload（receiptImagePath キーなし）でローカルのパスを消さない。
+        let context = try makeContext()
+        let merger = SnapKeiMerger(context: context)
+        let syncId = UUID()
+        let t0 = Date()
+        var insertJson = try #require(
+            JSONSerialization.jsonObject(
+                with: entryPayloadData(syncId: syncId, updatedAt: t0)
+            ) as? [String: Any]
+        )
+        insertJson["receiptImagePath"] = "receipts/2026/local.jpg"
+        try await merger.apply(SyncEnvelope(
+            entityType: "JournalEntry",
+            entityID: syncId.uuidString,
+            modifiedAt: t0,
+            data: try JSONSerialization.data(withJSONObject: insertJson)
+        ))
+
+        var updateJson = try #require(
+            JSONSerialization.jsonObject(
+                with: entryPayloadData(syncId: syncId, updatedAt: t0.addingTimeInterval(60), amount: 2_200)
+            ) as? [String: Any]
+        )
+        updateJson.removeValue(forKey: "receiptImagePath")
+        try await merger.apply(SyncEnvelope(
+            entityType: "JournalEntry",
+            entityID: syncId.uuidString,
+            modifiedAt: t0.addingTimeInterval(60),
+            data: try JSONSerialization.data(withJSONObject: updateJson)
+        ))
+
+        let fetched = try context.fetch(FetchDescriptor<JournalEntry>())
+        #expect(fetched.first?.amountIncludingTax == 2_200)
+        #expect(fetched.first?.receiptImagePath == "receipts/2026/local.jpg")
+    }
+
+    @MainActor
     @Test func apply_journalEntry_unknownEnumRaw_throwsInsteadOfSilentDrop() async throws {
         // 未知の enum rawValue（将来バージョンが追加したケース等）を黙って捨てると、
         // カーソルだけ進んで記録が永久に失われる。throw して再試行に回すこと。

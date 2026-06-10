@@ -102,6 +102,7 @@ public final class SnapKeiMerger: SyncMerging, @unchecked Sendable {
                 businessAllocationRate: payload.businessAllocationRate,
                 originalAmountIncludingTax: payload.originalAmountIncludingTax,
                 relatedFixedAssetId: payload.relatedFixedAssetId,
+                receiptImagePath: payload.receiptImagePath,
                 receiptImageHash: payload.receiptImageHash,
                 sourceType: sourceType,
                 createdAt: payload.createdAt,
@@ -137,6 +138,10 @@ public final class SnapKeiMerger: SyncMerging, @unchecked Sendable {
         entry.businessAllocationRate = payload.businessAllocationRate
         entry.originalAmountIncludingTax = payload.originalAmountIncludingTax
         entry.relatedFixedAssetId = payload.relatedFixedAssetId
+        // 旧バージョン端末の payload（キーなし → nil）でローカルのパスを消さない。
+        if let receiptImagePath = payload.receiptImagePath {
+            entry.receiptImagePath = receiptImagePath
+        }
         entry.receiptImageHash = payload.receiptImageHash
         entry.sourceTypeRaw = payload.sourceTypeRaw
         entry.updatedAt = payload.updatedAt
