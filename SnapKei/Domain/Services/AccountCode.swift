@@ -1,7 +1,7 @@
 import Foundation
 
 /// Well-known account codes from accounts_seed.json used by reporting and closing services.
-public enum AccountCode {
+nonisolated public enum AccountCode {
     public static let cash = "1110"
     public static let bankDeposit = "1210"
     public static let checkingDeposit = "1220"

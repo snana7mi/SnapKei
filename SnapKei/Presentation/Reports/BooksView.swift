@@ -29,6 +29,7 @@ public struct BooksView: View {
                     NavigationLink("仕訳帳") { JournalBookView(fiscalYear: selectedYear) }
                     NavigationLink("総勘定元帳") { GeneralLedgerView(fiscalYear: selectedYear) }
                     NavigationLink("残高試算表") { TrialBalanceView(fiscalYear: selectedYear) }
+                    NavigationLink("期首残高") { OpeningBalanceView(fiscalYear: selectedYear) }
                 }
                 Section {
                     NavigationLink("青色申告決算書") { KessanshoView(fiscalYear: selectedYear) }

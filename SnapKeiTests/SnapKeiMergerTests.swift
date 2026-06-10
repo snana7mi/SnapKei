@@ -361,8 +361,56 @@ struct SnapKeiMergerTests {
         ))
 
         let fetched = try context.fetch(FetchDescriptor<OpeningBalance>())
+            .filter { $0.accountCode == "1110" && $0.deletedAt == nil }
         #expect(fetched.count == 1)
         #expect(fetched.first?.amount == 100_000)
+    }
+
+    @MainActor
+    @Test func apply_openingBalance_rederivesCapitalLocally() async throws {
+        // 元入金は導出行: 非元入金の期首を受信したらローカルで再導出する。
+        // LWW のままでは2台が別科目を編集すると元入金が永久に不整合になる。
+        let context = try makeContext()
+        let merger = SnapKeiMerger(context: context)
+        let opening = OpeningBalance(
+            fiscalYear: 2026, accountCode: "1110", amount: 100_000,
+            syncId: OpeningBalance.deterministicSyncId(fiscalYear: 2026, accountCode: "1110")
+        )
+        try await merger.apply(SyncEnvelope(
+            entityType: "OpeningBalance",
+            entityID: opening.syncId.uuidString,
+            modifiedAt: opening.updatedAt,
+            data: try JSONEncoder.snapkeiSync.encode(OpeningBalancePayload(from: opening))
+        ))
+
+        let balances = try OpeningBalanceStore(context: context).balances(fiscalYear: 2026)
+        #expect(balances["1110"] == 100_000)
+        #expect(balances[AccountCode.capital] == -100_000)
+    }
+
+    @MainActor
+    @Test func apply_openingBalance_capitalPayloadIsIgnoredAndRederived() async throws {
+        let context = try makeContext()
+        let merger = SnapKeiMerger(context: context)
+        let store = OpeningBalanceStore(context: context)
+        try store.set(fiscalYear: 2026, accountCode: "1110", amount: 100_000)
+        try store.adjustCapitalToBalance(fiscalYear: 2026)
+
+        // 他デバイス由来の（古い残高に基づく）元入金値はそのまま適用しない。
+        let staleCapital = OpeningBalance(
+            fiscalYear: 2026, accountCode: AccountCode.capital, amount: -999,
+            syncId: OpeningBalance.deterministicSyncId(fiscalYear: 2026, accountCode: AccountCode.capital),
+            updatedAt: Date().addingTimeInterval(3_600)
+        )
+        try await merger.apply(SyncEnvelope(
+            entityType: "OpeningBalance",
+            entityID: staleCapital.syncId.uuidString,
+            modifiedAt: staleCapital.updatedAt,
+            data: try JSONEncoder.snapkeiSync.encode(OpeningBalancePayload(from: staleCapital))
+        ))
+
+        let balances = try store.balances(fiscalYear: 2026)
+        #expect(balances[AccountCode.capital] == -100_000)
     }
 
     @MainActor
@@ -387,6 +435,7 @@ struct SnapKeiMergerTests {
         }
 
         let fetched = try context.fetch(FetchDescriptor<OpeningBalance>())
+            .filter { $0.accountCode == "1110" && $0.deletedAt == nil }
         #expect(fetched.count == 1)
         #expect(fetched.first?.amount == 2)
     }
