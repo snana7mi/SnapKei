@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 
-public enum ImageStorageService {
+nonisolated public enum ImageStorageService {
     public struct Result: Sendable, Equatable {
         public let relativePath: String
         public let sha256Hex: String

@@ -82,7 +82,14 @@ public final class SwiftDataExpenseRepository: ExpenseRepository, @unchecked Sen
             reason: reason
         )
         context.insert(log)
-        try context.save()
+        do {
+            try context.save()
+        } catch {
+            // 保存失敗時に pending insert を残すと後続の autosave で「半端な仕訳」が
+            // 確定してしまう（証憑ファイルは呼び出し側が削除済みのことがある）。
+            context.rollback()
+            throw error
+        }
         SyncChangeNotifier.shared.notify()
     }
 
@@ -102,7 +109,14 @@ public final class SwiftDataExpenseRepository: ExpenseRepository, @unchecked Sen
             reason: reason
         )
         context.insert(log)
-        try context.save()
+        do {
+            try context.save()
+        } catch {
+            // 保存失敗時に pending insert を残すと後続の autosave で「半端な仕訳」が
+            // 確定してしまう（証憑ファイルは呼び出し側が削除済みのことがある）。
+            context.rollback()
+            throw error
+        }
         SyncChangeNotifier.shared.notify()
     }
 
@@ -121,7 +135,14 @@ public final class SwiftDataExpenseRepository: ExpenseRepository, @unchecked Sen
             reason: reason
         )
         context.insert(log)
-        try context.save()
+        do {
+            try context.save()
+        } catch {
+            // 保存失敗時に pending insert を残すと後続の autosave で「半端な仕訳」が
+            // 確定してしまう（証憑ファイルは呼び出し側が削除済みのことがある）。
+            context.rollback()
+            throw error
+        }
         SyncChangeNotifier.shared.notify()
     }
 

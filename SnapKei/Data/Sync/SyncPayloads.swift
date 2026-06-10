@@ -24,6 +24,9 @@ struct JournalEntryPayload: Codable {
     let businessAllocationRate: Double
     let originalAmountIncludingTax: Int?
     let relatedFixedAssetId: UUID?
+    // 旧バージョンの payload には存在しない（Optional の decodeIfPresent で互換）。
+    // 画像ファイル自体は同期されない: 他端末ではパスの有無で「端末内に画像なし」を表示する。
+    let receiptImagePath: String?
     let receiptImageHash: String?
     let sourceTypeRaw: String
     let createdAt: Date
@@ -55,6 +58,7 @@ struct JournalEntryPayload: Codable {
         businessAllocationRate = entry.businessAllocationRate
         originalAmountIncludingTax = entry.originalAmountIncludingTax
         relatedFixedAssetId = entry.relatedFixedAssetId
+        receiptImagePath = entry.receiptImagePath
         receiptImageHash = entry.receiptImageHash
         sourceTypeRaw = entry.sourceTypeRaw
         createdAt = entry.createdAt

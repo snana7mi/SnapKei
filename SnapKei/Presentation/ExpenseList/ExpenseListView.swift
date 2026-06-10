@@ -8,6 +8,7 @@ public struct ExpenseListView: View {
     @State private var viewModel: ExpenseListViewModel?
     @State private var showFilter = false
     @State private var showManualEntry = false
+    @State private var selectedEntry: JournalEntry?
     @State private var voidErrorMessage: String?
 
     public init() {}
@@ -28,26 +29,33 @@ public struct ExpenseListView: View {
     private func listContent(_ viewModel: ExpenseListViewModel) -> some View {
         List {
             ForEach(viewModel.entries) { entry in
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text(entry.counterpartyName).font(.subheadline.weight(.semibold))
-                        Spacer()
-                        Text("¥\(entry.amountIncludingTax)").font(.subheadline.monospacedDigit())
+                Button {
+                    selectedEntry = entry
+                } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(entry.counterpartyName).font(.subheadline.weight(.semibold))
+                            Spacer()
+                            Text("¥\(entry.amountIncludingTax)").font(.subheadline.monospacedDigit())
+                        }
+                        HStack {
+                            Text(entry.transactionDate, format: .dateTime.year().month().day())
+                            Text(entry.transactionDescription).lineLimit(1)
+                            Spacer()
+                            if entry.invoiceQualified { badge("適格", color: .green) }
+                            if entry.isLateEntry { badge("遅延", color: .orange) }
+                            if entry.isVoided { badge("取消", color: .red) }
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     }
-                    HStack {
-                        Text(entry.transactionDate, format: .dateTime.year().month().day())
-                        Text(entry.transactionDescription).lineLimit(1)
-                        Spacer()
-                        if entry.invoiceQualified { badge("適格", color: .green) }
-                        if entry.isLateEntry { badge("遅延", color: .orange) }
-                        if entry.isVoided { badge("取消", color: .red) }
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                 }
+                .foregroundStyle(.primary)
                 .swipeActions(edge: .trailing) {
-                    Button(role: .destructive) { voidEntry(entry, viewModel: viewModel) } label: {
-                        Label("取消", systemImage: "xmark.circle")
+                    if !entry.isVoided {
+                        Button(role: .destructive) { voidEntry(entry, viewModel: viewModel) } label: {
+                            Label("取消", systemImage: "xmark.circle")
+                        }
                     }
                 }
             }
@@ -73,6 +81,9 @@ public struct ExpenseListView: View {
         }
         .sheet(isPresented: $showManualEntry, onDismiss: { viewModel.refresh() }) {
             ManualEntryView()
+        }
+        .sheet(item: $selectedEntry, onDismiss: { viewModel.refresh() }) { entry in
+            EntryDetailView(entry: entry)
         }
         .alert(
             "取消できません",
@@ -105,7 +116,11 @@ public struct ExpenseListView: View {
             return
         }
         let repository = SwiftDataExpenseRepository(context: context, deviceId: DeviceID.current)
-        try? repository.void(entry, reason: "ユーザー操作")
+        do {
+            try repository.void(entry, reason: "ユーザー操作")
+        } catch {
+            voidErrorMessage = error.localizedDescription
+        }
         viewModel.refresh()
     }
 
