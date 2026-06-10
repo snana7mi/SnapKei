@@ -2,6 +2,23 @@ import Foundation
 import LLMGatewayKit
 import SwiftData
 
+/// Thrown when a pulled record cannot be applied. Propagating (instead of silently
+/// skipping) keeps the sync cursor from advancing, so the batch is retried on later
+/// syncs — and succeeds once the app updates to a version that knows the value.
+/// Note this blocks the whole pull stream until then; that is preferred over silently
+/// losing a bookkeeping record or materializing it with fallback enum semantics
+/// (a wrong FixedAsset.treatment would post incorrect depreciation that syncs back out).
+public enum MergeError: Error, Equatable, LocalizedError {
+    case unknownEnumValue(entity: String, field: String, rawValue: String)
+
+    public var errorDescription: String? {
+        switch self {
+        case let .unknownEnumValue(entity, field, rawValue):
+            "新しいバージョンのアプリで作成されたデータ（\(entity).\(field)=\(rawValue)）を読み込めません。アプリを最新版に更新してください。"
+        }
+    }
+}
+
 @MainActor
 public final class SnapKeiMerger: SyncMerging, @unchecked Sendable {
     private let context: ModelContext
@@ -29,17 +46,39 @@ public final class SnapKeiMerger: SyncMerging, @unchecked Sendable {
         }
     }
 
+    /// Rejects payloads carrying enum raw values this app version does not know
+    /// (e.g. produced by a future version). Called only on the branches that
+    /// materialize data — stale payloads and no-op tombstones are discarded without
+    /// validation so an unapplicable record cannot wedge the cursor needlessly.
+    private func decodeEnums(
+        _ payload: JournalEntryPayload
+    ) throws -> (taxCategory: TaxCategory, priceEntryMode: PriceEntryMode, paymentMethod: PaymentMethod, sourceType: RecordSource) {
+        guard let taxCategory = TaxCategory(rawValue: payload.taxCategoryRaw) else {
+            throw MergeError.unknownEnumValue(entity: "JournalEntry", field: "taxCategory", rawValue: payload.taxCategoryRaw)
+        }
+        guard let priceEntryMode = PriceEntryMode(rawValue: payload.priceEntryModeRaw) else {
+            throw MergeError.unknownEnumValue(entity: "JournalEntry", field: "priceEntryMode", rawValue: payload.priceEntryModeRaw)
+        }
+        guard let paymentMethod = PaymentMethod(rawValue: payload.paymentMethodRaw) else {
+            throw MergeError.unknownEnumValue(entity: "JournalEntry", field: "paymentMethod", rawValue: payload.paymentMethodRaw)
+        }
+        guard let sourceType = RecordSource(rawValue: payload.sourceTypeRaw) else {
+            throw MergeError.unknownEnumValue(entity: "JournalEntry", field: "sourceType", rawValue: payload.sourceTypeRaw)
+        }
+        return (taxCategory, priceEntryMode, paymentMethod, sourceType)
+    }
+
     private func applyJournalEntry(_ payload: JournalEntryPayload) throws {
         let syncId = payload.syncId
         let descriptor = FetchDescriptor<JournalEntry>(predicate: #Predicate { $0.syncId == syncId })
         if let existing = try context.fetch(descriptor).first {
             guard existing.updatedAt <= payload.updatedAt else { return }
+            // update() stores raw strings, but unknown enums are still rejected:
+            // fallback accessors would mis-handle the record (see MergeError).
+            _ = try decodeEnums(payload)
             update(existing, from: payload)
         } else {
-            guard let taxCategory = TaxCategory(rawValue: payload.taxCategoryRaw),
-                  let priceEntryMode = PriceEntryMode(rawValue: payload.priceEntryModeRaw),
-                  let paymentMethod = PaymentMethod(rawValue: payload.paymentMethodRaw),
-                  let sourceType = RecordSource(rawValue: payload.sourceTypeRaw) else { return }
+            let (taxCategory, priceEntryMode, paymentMethod, sourceType) = try decodeEnums(payload)
             let entry = JournalEntry(
                 entryNumber: payload.entryNumber,
                 fiscalYear: payload.fiscalYear,
@@ -104,15 +143,27 @@ public final class SnapKeiMerger: SyncMerging, @unchecked Sendable {
         entry.isVoided = payload.isVoided || payload.deletedAt != nil
     }
 
+    private func decodeEnums(
+        _ payload: FixedAssetPayload
+    ) throws -> (depreciationMethod: DepreciationMethod, treatment: AssetTreatment) {
+        guard let depreciationMethod = DepreciationMethod(rawValue: payload.depreciationMethodRaw) else {
+            throw MergeError.unknownEnumValue(entity: "FixedAsset", field: "depreciationMethod", rawValue: payload.depreciationMethodRaw)
+        }
+        guard let treatment = AssetTreatment(rawValue: payload.treatmentRaw) else {
+            throw MergeError.unknownEnumValue(entity: "FixedAsset", field: "treatment", rawValue: payload.treatmentRaw)
+        }
+        return (depreciationMethod, treatment)
+    }
+
     private func applyFixedAsset(_ payload: FixedAssetPayload) throws {
         let syncId = payload.syncId
         let descriptor = FetchDescriptor<FixedAsset>(predicate: #Predicate { $0.syncId == syncId })
         if let existing = try context.fetch(descriptor).first {
             guard existing.updatedAt <= payload.updatedAt else { return }
+            _ = try decodeEnums(payload)
             update(existing, from: payload)
         } else if payload.deletedAt == nil {
-            guard let depreciationMethod = DepreciationMethod(rawValue: payload.depreciationMethodRaw),
-                  let treatment = AssetTreatment(rawValue: payload.treatmentRaw) else { return }
+            let (depreciationMethod, treatment) = try decodeEnums(payload)
             let asset = FixedAsset(
                 assetName: payload.assetName,
                 assetCategoryCode: payload.assetCategoryCode,

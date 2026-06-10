@@ -51,8 +51,10 @@ public struct ControlRouteStatus: Sendable, Equatable {
 public final class HomeViewModel {
     public struct MonthlySummary: Sendable, Equatable {
         public let entryCount: Int
-        public let totalIncludingTax: Int
-        public let totalConsumptionTax: Int
+        public let incomeTotal: Int
+        public let expenseTotal: Int
+        /// 支出仕訳の消費税（仕入税額）のみ。収入側の仮受消費税とは合算しない。
+        public let expenseConsumptionTax: Int
     }
 
     public struct AccountTotal: Identifiable, Sendable, Equatable {
@@ -77,26 +79,67 @@ public final class HomeViewModel {
         )
     }
 
-    public func monthlySummary(year: Int, month: Int) throws -> MonthlySummary {
+    /// 仕訳を 収入/支出/振替 に分類して集計する（手動仕訳の導入で支出以外の仕訳が存在する）。
+    /// 振替は資金移動なので合計に含めない。
+    public func monthlySummary(
+        year: Int,
+        month: Int,
+        accountTypes: (String) -> AccountType?
+    ) throws -> MonthlySummary {
         let entries = try entriesInMonth(year: year, month: month)
+        var income = 0
+        var expense = 0
+        var expenseTax = 0
+        for entry in entries {
+            let debitType = accountTypes(entry.debitAccountCode)
+            let creditType = accountTypes(entry.creditAccountCode)
+            switch ManualEntryRules.kind(debitType: debitType, creditType: creditType) {
+            case .income:
+                income += creditType == .revenue ? entry.amountIncludingTax : -entry.amountIncludingTax
+            case .expense:
+                let sign = debitType == .expense ? 1 : -1
+                expense += sign * entry.amountIncludingTax
+                expenseTax += sign * entry.consumptionTax
+            case .transfer:
+                break
+            }
+        }
         return MonthlySummary(
             entryCount: entries.count,
-            totalIncludingTax: entries.reduce(0) { $0 + $1.amountIncludingTax },
-            totalConsumptionTax: entries.reduce(0) { $0 + $1.consumptionTax }
+            incomeTotal: income,
+            expenseTotal: expense,
+            expenseConsumptionTax: expenseTax
         )
     }
 
-    public func byDebitAccount(year: Int, month: Int, accountLookup: (String) -> String) throws -> [AccountTotal] {
-        let grouped = Dictionary(grouping: try entriesInMonth(year: year, month: month), by: \.debitAccountCode)
-        return grouped.map { code, entries in
-            AccountTotal(id: code, name: accountLookup(code), amount: entries.reduce(0) { $0 + $1.amountIncludingTax })
+    /// 科目別チャートは費用科目のみ（収入・振替の借方科目を「支出カテゴリ」として描かない）。
+    public func byDebitAccount(
+        year: Int,
+        month: Int,
+        accountLookup: (String) -> String,
+        accountTypes: (String) -> AccountType?
+    ) throws -> [AccountTotal] {
+        var totals: [String: Int] = [:]
+        for entry in try entriesInMonth(year: year, month: month) {
+            if accountTypes(entry.debitAccountCode) == .expense {
+                totals[entry.debitAccountCode, default: 0] += entry.amountIncludingTax
+            }
+            if accountTypes(entry.creditAccountCode) == .expense {
+                totals[entry.creditAccountCode, default: 0] -= entry.amountIncludingTax
+            }
         }
-        .sorted { $0.amount > $1.amount }
+        return totals
+            .filter { $0.value > 0 }
+            .map { AccountTotal(id: $0.key, name: accountLookup($0.key), amount: $0.value) }
+            .sorted { $0.amount > $1.amount }
     }
 
+    /// スキャナ保存期限の警告はレシート画像のある仕訳にのみ意味がある。
+    /// 手動仕訳（書類なし）を期限切れ扱いにしない。
     public func overdueEntries(today: Date = Date()) throws -> [JournalEntry] {
         try repository.search(criteria: ExpenseSearchCriteria()).filter {
-            ComplianceService.daysUntilScanDeadline(receiptDate: $0.transactionDate, today: today) < 14
+            $0.receiptImagePath != nil &&
+                ComplianceService.daysUntilScanDeadline(receiptDate: $0.transactionDate, today: today) < 14
         }
     }
 

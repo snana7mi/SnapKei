@@ -30,7 +30,22 @@ public final class ExpenseListViewModel {
         }
     }
 
-    public var totalAmount: Int {
-        entries.reduce(0) { $0 + $1.amountIncludingTax }
+    /// 表示中の仕訳を 収入/支出 に分けて合計する（振替は資金移動なので除外）。
+    public func totals(accountTypes: (String) -> AccountType?) -> (income: Int, expense: Int) {
+        var income = 0
+        var expense = 0
+        for entry in entries {
+            let debitType = accountTypes(entry.debitAccountCode)
+            let creditType = accountTypes(entry.creditAccountCode)
+            switch ManualEntryRules.kind(debitType: debitType, creditType: creditType) {
+            case .income:
+                income += creditType == .revenue ? entry.amountIncludingTax : -entry.amountIncludingTax
+            case .expense:
+                expense += (debitType == .expense ? 1 : -1) * entry.amountIncludingTax
+            case .transfer:
+                break
+            }
+        }
+        return (income, expense)
     }
 }

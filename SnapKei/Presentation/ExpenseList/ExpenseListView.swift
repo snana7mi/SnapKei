@@ -4,8 +4,10 @@ import UIKit
 
 public struct ExpenseListView: View {
     @Environment(\.modelContext) private var context
+    @Query(sort: \Account.code) private var accounts: [Account]
     @State private var viewModel: ExpenseListViewModel?
     @State private var showFilter = false
+    @State private var showManualEntry = false
 
     public init() {}
 
@@ -52,17 +54,24 @@ public struct ExpenseListView: View {
         .searchable(text: Binding(get: { viewModel.searchText }, set: { viewModel.searchText = $0; viewModel.refresh() }))
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
+                Button { showManualEntry = true } label: { Image(systemName: "plus") }
+                    .accessibilityLabel("手動入力")
                 Button { showFilter = true } label: { Image(systemName: "line.3.horizontal.decrease.circle") }
                     .accessibilityLabel("フィルタ")
                 Button { exportCSV(viewModel: viewModel) } label: { Image(systemName: "square.and.arrow.up") }
                     .accessibilityLabel("CSV を共有")
             }
             ToolbarItem(placement: .bottomBar) {
-                Text("合計 ¥\(viewModel.totalAmount)")
+                let typeByCode = Dictionary(uniqueKeysWithValues: accounts.map { ($0.code, $0.accountType) })
+                let totals = viewModel.totals(accountTypes: { typeByCode[$0] })
+                Text("支出 ¥\(totals.expense)　収入 ¥\(totals.income)")
             }
         }
         .sheet(isPresented: $showFilter) {
             ExpenseFilterSheet(criteria: Binding(get: { viewModel.criteria }, set: { viewModel.criteria = $0; viewModel.refresh() }))
+        }
+        .sheet(isPresented: $showManualEntry, onDismiss: { viewModel.refresh() }) {
+            ManualEntryView()
         }
         .task { viewModel.refresh() }
     }
@@ -76,11 +85,11 @@ public struct ExpenseListView: View {
     }
 
     private func initializeViewModel() {
-        viewModel = ExpenseListViewModel(repository: SwiftDataExpenseRepository(context: context, deviceId: deviceID()))
+        viewModel = ExpenseListViewModel(repository: SwiftDataExpenseRepository(context: context, deviceId: DeviceID.current))
     }
 
     private func voidEntry(_ entry: JournalEntry, viewModel: ExpenseListViewModel) {
-        let repository = SwiftDataExpenseRepository(context: context, deviceId: deviceID())
+        let repository = SwiftDataExpenseRepository(context: context, deviceId: DeviceID.current)
         try? repository.void(entry, reason: "ユーザー操作")
         viewModel.refresh()
     }
@@ -92,9 +101,5 @@ public struct ExpenseListView: View {
         let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("snapkei_export.csv")
         try? data.write(to: url, options: [.atomic])
         SharePresenter.share(url: url)
-    }
-
-    private func deviceID() -> String {
-        UIDevice.current.identifierForVendor?.uuidString ?? "unknown"
     }
 }

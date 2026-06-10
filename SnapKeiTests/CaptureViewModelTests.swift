@@ -15,7 +15,6 @@ struct CaptureViewModelTests {
         let vm = CaptureViewModel(
             aiRouter: router,
             repository: repository,
-            appSettings: { .default },
             aiSettings: { .default }
         )
         let entry = JournalEntry(

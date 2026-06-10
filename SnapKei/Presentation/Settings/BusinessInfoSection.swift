@@ -17,9 +17,6 @@ public struct BusinessInfoSection: View {
                 .textInputAutocapitalization(.characters)
                 .autocorrectionDisabled()
                 .onSubmit(onCommit)
-            Stepper(value: $settings.fiscalYearStartMonth, in: 1...12, onEditingChanged: { _ in onCommit() }) {
-                Text("事業年度開始月: \(settings.fiscalYearStartMonth) 月")
-            }
         }
     }
 }

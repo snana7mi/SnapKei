@@ -46,10 +46,7 @@ struct SnapKeiApp: App {
         let container = SnapKeiModelContainer.shared
         self.modelContainer = container
         let context = container.mainContext
-        let repository = SwiftDataExpenseRepository(
-            context: context,
-            deviceId: UIDevice.current.identifierForVendor?.uuidString ?? "unknown"
-        )
+        let repository = SwiftDataExpenseRepository(context: context, deviceId: DeviceID.current)
 
         let cursor = SyncCursorStore()
         let engine = SyncEngine(
@@ -58,7 +55,7 @@ struct SnapKeiApp: App {
             collector: SnapKeiChangeCollector(context: context, cursor: cursor),
             merger: SnapKeiMerger(context: context),
             state: SyncState.shared,
-            deviceID: UIDevice.current.identifierForVendor?.uuidString ?? "unknown-device",
+            deviceID: DeviceID.current,
             isEligible: { [weak auth] in
                 guard let auth else { return false }
                 return await MainActor.run {
@@ -69,24 +66,9 @@ struct SnapKeiApp: App {
         self.syncEngine = engine
         self._syncStatusObserver = State(initialValue: SyncStatusObserver(engine: engine))
 
-        let syncChanges = AsyncStream<Void> { continuation in
-            let repoTask = Task {
-                for await _ in repository.changes {
-                    continuation.yield()
-                }
-            }
-            let notifierTask = Task {
-                for await _ in SyncChangeNotifier.shared.changes {
-                    continuation.yield()
-                }
-            }
-            continuation.onTermination = { _ in
-                repoTask.cancel()
-                notifierTask.cancel()
-            }
-        }
+        // 変更通知は SyncChangeNotifier.shared の単一チャネル（全リポジトリ/サービスが notify する）。
         Task {
-            await engine.startAutoSync(repoChanges: syncChanges)
+            await engine.startAutoSync(repoChanges: SyncChangeNotifier.shared.changes)
         }
 
         let proxyService = AIProxyService(
@@ -120,7 +102,6 @@ struct SnapKeiApp: App {
         self._captureViewModel = State(initialValue: CaptureViewModel(
             aiRouter: router,
             repository: repository,
-            appSettings: { AppSettings.load() },
             aiSettings: { AISettings.load() }
         ))
     }

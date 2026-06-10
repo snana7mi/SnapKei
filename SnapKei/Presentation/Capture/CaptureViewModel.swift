@@ -27,18 +27,15 @@ public final class CaptureViewModel {
 
     private let aiRouter: AIRouter
     private let repository: ExpenseRepository
-    private let appSettings: () -> AppSettings
     private let aiSettings: () -> AISettings
 
     public init(
         aiRouter: AIRouter,
         repository: ExpenseRepository,
-        appSettings: @escaping () -> AppSettings,
         aiSettings: @escaping () -> AISettings
     ) {
         self.aiRouter = aiRouter
         self.repository = repository
-        self.appSettings = appSettings
         self.aiSettings = aiSettings
     }
 
@@ -121,10 +118,6 @@ public final class CaptureViewModel {
     }
 
     private func fiscalYear(for date: Date) -> Int {
-        let calendar = Calendar(identifier: .gregorian)
-        let year = calendar.component(.year, from: date)
-        let month = calendar.component(.month, from: date)
-        let startMonth = appSettings().fiscalYearStartMonth
-        return month >= startMonth ? year : year - 1
+        FiscalYearRule.year(for: date)
     }
 }

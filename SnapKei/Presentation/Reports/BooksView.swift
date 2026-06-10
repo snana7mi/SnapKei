@@ -30,10 +30,15 @@ public struct BooksView: View {
                     NavigationLink("総勘定元帳") { GeneralLedgerView(fiscalYear: selectedYear) }
                     NavigationLink("残高試算表") { TrialBalanceView(fiscalYear: selectedYear) }
                 }
-                Section("決算書") {
+                Section {
+                    NavigationLink("青色申告決算書") { KessanshoView(fiscalYear: selectedYear) }
                     NavigationLink("損益計算書") { ProfitAndLossReportView(fiscalYear: selectedYear) }
                     NavigationLink("貸借対照表") { BalanceSheetReportView(fiscalYear: selectedYear) }
                     NavigationLink("年次締め") { ClosingView(fiscalYear: selectedYear) }
+                } header: {
+                    Text("決算書")
+                } footer: {
+                    Text("青色申告決算書は損益計算書・貸借対照表・減価償却の内容を申告用にまとめます。出力前に年次締めと減価償却を確認してください。")
                 }
                 Section {
                     Text("帳簿・決算書は記帳補助のための表示です。55万/65万円控除の適用や税務判断を保証するものではありません。")
@@ -268,7 +273,7 @@ private struct ClosingView: View {
     }
 
     private var service: YearEndClosingService {
-        YearEndClosingService(context: context, deviceId: "local-device")
+        YearEndClosingService(context: context, deviceId: DeviceID.current)
     }
 
     private func run(_ action: () throws -> Void) {
