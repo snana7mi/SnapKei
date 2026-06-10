@@ -208,6 +208,12 @@ public final class SnapKeiMerger: SyncMerging, @unchecked Sendable {
     }
 
     private func applyOpeningBalance(_ payload: OpeningBalancePayload) throws {
+        // 元入金（3110）は導出行: 受信値を LWW で適用すると、2台が別科目を編集した
+        // 場合に永久に不整合になる。受信値は無視してローカルで再導出する。
+        if payload.accountCode == AccountCode.capital {
+            try OpeningBalanceStore(context: context).adjustCapitalToBalance(fiscalYear: payload.fiscalYear)
+            return
+        }
         // Match on syncId only: syncId is derived deterministically from (fiscalYear, accountCode),
         // so every device agrees on it. Never rewrite an existing row's identity (that would orphan
         // a server row); the natural key is already encoded in the shared syncId.
@@ -235,6 +241,8 @@ public final class SnapKeiMerger: SyncMerging, @unchecked Sendable {
             ))
         }
         try context.save()
+        // 非元入金の期首が変わったら元入金を再導出（set の同値ガードにより無変更なら no-op）。
+        try OpeningBalanceStore(context: context).adjustCapitalToBalance(fiscalYear: payload.fiscalYear)
     }
 
     private func applyFiscalYearClosure(_ payload: FiscalYearClosurePayload) throws {

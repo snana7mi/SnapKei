@@ -122,7 +122,11 @@ public final class YearEndClosingService {
         let now = Date()
         closure.deletedAt = now
         closure.updatedAt = now
-        try OpeningBalanceStore(context: context).deleteAutoRolled(fiscalYear: fiscalYear + 1)
+        let openingStore = OpeningBalanceStore(context: context)
+        try openingStore.deleteAutoRolled(fiscalYear: fiscalYear + 1)
+        // 自動繰越行の削除後、生き残った手動行に対して元入金を再導出する
+        // （導出行を孤児として残すと翌年が貸借不一致になる）。
+        try openingStore.adjustCapitalToBalance(fiscalYear: fiscalYear + 1)
         context.insert(SystemActivityLog(
             actorDeviceId: deviceId,
             activityType: .unlockPeriod,
@@ -178,7 +182,9 @@ public final class YearEndClosingService {
         accounts: [Account],
         store: OpeningBalanceStore
     ) throws {
-        try store.deleteAutoRolled(fiscalYear: fiscalYear + 1)
+        // 締め（再締め含む）は「期首 = 前期末」を全面的に作り直す。手動行も含めて
+        // 一旦クリアしないと、前期末に存在しない科目の行が生き残り年度間の継続性が壊れる。
+        try store.clear(fiscalYear: fiscalYear + 1)
         let accountByCode = Dictionary(uniqueKeysWithValues: accounts.map { ($0.code, $0) })
         var closing = openings
         for entry in entries where !entry.isVoided {
