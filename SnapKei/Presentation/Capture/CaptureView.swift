@@ -2,6 +2,7 @@ import SwiftUI
 
 public struct CaptureView: View {
     @State private var sheetSource: ImageSourcePicker.Source?
+    @State private var showManualEntry = false
     @Bindable private var viewModel: CaptureViewModel
 
     public init(viewModel: CaptureViewModel) {
@@ -24,6 +25,11 @@ public struct CaptureView: View {
                         onImagePicked: { image in Task { await viewModel.handlePickedImage(image) } },
                         onPDFPicked: { url in Task { await viewModel.handlePickedPDF(url) } }
                     )
+                    Button { showManualEntry = true } label: {
+                        Label("手動入力", systemImage: "square.and.pencil").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .padding(.horizontal)
 
                 case .parsing:
                     Spacer()
@@ -56,6 +62,7 @@ public struct CaptureView: View {
                 }
             }
             .navigationTitle("撮影・取込")
+            .sheet(isPresented: $showManualEntry) { ManualEntryView() }
         }
     }
 }

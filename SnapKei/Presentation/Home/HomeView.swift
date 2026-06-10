@@ -20,8 +20,9 @@ public struct HomeView: View {
                 Section("今月の概要") {
                     if let summary {
                         HStack { Text("件数"); Spacer(); Text("\(summary.entryCount) 件") }
-                        HStack { Text("税込合計"); Spacer(); Text("¥\(summary.totalIncludingTax)") }
-                        HStack { Text("消費税"); Spacer(); Text("¥\(summary.totalConsumptionTax)") }
+                        HStack { Text("収入"); Spacer(); Text("¥\(summary.incomeTotal)") }
+                        HStack { Text("支出"); Spacer(); Text("¥\(summary.expenseTotal)") }
+                        HStack { Text("消費税(支出分)"); Spacer(); Text("¥\(summary.expenseConsumptionTax)") }
                     } else {
                         Text("計算中...").foregroundStyle(.secondary)
                     }
@@ -101,11 +102,15 @@ public struct HomeView: View {
         let year = calendar.component(.year, from: now)
         let month = calendar.component(.month, from: now)
         do {
-            let viewModel = HomeViewModel(repository: SwiftDataExpenseRepository(context: context, deviceId: deviceID()))
-            summary = try viewModel.monthlySummary(year: year, month: month)
-            byAccount = try viewModel.byDebitAccount(year: year, month: month) { code in
-                accounts.first(where: { $0.code == code })?.nameJa ?? code
-            }
+            let viewModel = HomeViewModel(repository: SwiftDataExpenseRepository(context: context, deviceId: DeviceID.current))
+            let typeByCode = Dictionary(uniqueKeysWithValues: accounts.map { ($0.code, $0.accountType) })
+            summary = try viewModel.monthlySummary(year: year, month: month) { typeByCode[$0] }
+            byAccount = try viewModel.byDebitAccount(
+                year: year,
+                month: month,
+                accountLookup: { code in accounts.first(where: { $0.code == code })?.nameJa ?? code },
+                accountTypes: { typeByCode[$0] }
+            )
             overdue = try viewModel.overdueEntries()
             recent = try viewModel.recentEntries()
             controlRoute = try viewModel.controlRouteStatus()
@@ -122,10 +127,6 @@ public struct HomeView: View {
         } catch {
             print("[HomeView] PDF generation failed: \(error)")
         }
-    }
-
-    private func deviceID() -> String {
-        UIDevice.current.identifierForVendor?.uuidString ?? "unknown"
     }
 }
 

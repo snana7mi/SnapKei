@@ -125,6 +125,53 @@ struct DepreciationServiceTests {
         #expect(amount.ownerPortion == 0)
     }
 
+    @Test func disposedAsset_yearAfterDisposal_returnsZero() {
+        let asset = FixedAsset(
+            assetName: "売却済みカメラ",
+            assetCategoryCode: "CAMERA",
+            acquisitionDate: date("2025-01-01"),
+            serviceStartDate: date("2025-01-01"),
+            acquisitionAmount: 500_000,
+            usefulLifeYears: 5,
+            treatment: .normalDepreciation,
+            disposalDate: date("2026-06-30")
+        )
+        let amount = DepreciationService.annualAmount(for: asset, fiscalYear: 2027)
+        #expect(amount.full == 0)
+        #expect(amount.deductible == 0)
+    }
+
+    @Test func disposedLumpSumAsset_continuesThreeYearAmortization() {
+        // 一括償却資産は譲渡・除却しても残存年度の3年均等償却を継続する
+        // （所得税法施行令139条）。処分ガードの対象外であること。
+        let asset = FixedAsset(
+            assetName: "売却済み事務机",
+            assetCategoryCode: "FURNITURE",
+            acquisitionDate: date("2025-05-01"),
+            serviceStartDate: date("2025-05-01"),
+            acquisitionAmount: 150_000,
+            usefulLifeYears: 8,
+            treatment: .lumpSumDepreciation,
+            disposalDate: date("2026-03-31")
+        )
+        #expect(DepreciationService.annualAmount(for: asset, fiscalYear: 2027).full == 50_000)
+    }
+
+    @Test func disposedAsset_disposalYearItself_stillDepreciates() {
+        // 処分年度は計上対象のまま（月割計算は将来対応）。翌年以降のみ停止する。
+        let asset = FixedAsset(
+            assetName: "売却済みカメラ",
+            assetCategoryCode: "CAMERA",
+            acquisitionDate: date("2025-01-01"),
+            serviceStartDate: date("2025-01-01"),
+            acquisitionAmount: 500_000,
+            usefulLifeYears: 5,
+            treatment: .normalDepreciation,
+            disposalDate: date("2026-06-30")
+        )
+        #expect(DepreciationService.annualAmount(for: asset, fiscalYear: 2026).full == 100_000)
+    }
+
     @Test func annualAmount_lumpSum_splitsToo() {
         let asset = FixedAsset(
             assetName: "事務机",

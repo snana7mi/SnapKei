@@ -15,6 +15,12 @@ private enum TestContainerRetainer {
 @Suite("ExpenseRepository — create / entryNumber", .serialized)
 struct ExpenseRepositoryCreateTests {
 
+    @Test func fiscalYearClosedError_hasActionableJapaneseMessage() {
+        let message = RepositoryError.fiscalYearClosed(2025).localizedDescription
+        #expect(message.contains("2025"))
+        #expect(message.contains("締め済み"))
+    }
+
     @MainActor
     private func makeRepo() throws -> (SwiftDataExpenseRepository, ModelContext) {
         let container = try SnapKeiModelContainer.inMemory()

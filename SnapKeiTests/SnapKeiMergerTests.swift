@@ -83,6 +83,221 @@ struct SnapKeiMergerTests {
     }
 
     @MainActor
+    @Test func apply_journalEntry_unknownEnumRaw_throwsInsteadOfSilentDrop() async throws {
+        // 未知の enum rawValue（将来バージョンが追加したケース等）を黙って捨てると、
+        // カーソルだけ進んで記録が永久に失われる。throw して再試行に回すこと。
+        let context = try makeContext()
+        let merger = SnapKeiMerger(context: context)
+        let syncId = UUID()
+        var json = try #require(
+            JSONSerialization.jsonObject(
+                with: entryPayloadData(syncId: syncId, updatedAt: Date())
+            ) as? [String: Any]
+        )
+        json["taxCategoryRaw"] = "futureTaxCategory"
+        let data = try JSONSerialization.data(withJSONObject: json)
+
+        await #expect(throws: (any Error).self) {
+            try await merger.apply(SyncEnvelope(
+                entityType: "JournalEntry",
+                entityID: syncId.uuidString,
+                modifiedAt: Date(),
+                data: data
+            ))
+        }
+        #expect(try context.fetch(FetchDescriptor<JournalEntry>()).isEmpty)
+    }
+
+    @MainActor
+    @Test func apply_fixedAsset_unknownEnumRaw_throwsInsteadOfSilentDrop() async throws {
+        let context = try makeContext()
+        let merger = SnapKeiMerger(context: context)
+        let syncId = UUID()
+        let t0 = Date()
+        let asset = FixedAsset(
+            assetName: "将来資産",
+            assetCategoryCode: "PC",
+            acquisitionDate: t0,
+            serviceStartDate: t0,
+            acquisitionAmount: 300_000,
+            usefulLifeYears: 4,
+            treatment: .normalDepreciation,
+            syncId: syncId,
+            updatedAt: t0
+        )
+        var json = try #require(
+            JSONSerialization.jsonObject(
+                with: JSONEncoder.snapkeiSync.encode(FixedAssetPayload(from: asset))
+            ) as? [String: Any]
+        )
+        json["treatmentRaw"] = "futureTreatment"
+        let data = try JSONSerialization.data(withJSONObject: json)
+
+        await #expect(throws: (any Error).self) {
+            try await merger.apply(SyncEnvelope(
+                entityType: "FixedAsset",
+                entityID: syncId.uuidString,
+                modifiedAt: t0,
+                data: data
+            ))
+        }
+        #expect(try context.fetch(FetchDescriptor<FixedAsset>()).isEmpty)
+    }
+
+    @MainActor
+    @Test func apply_journalEntry_unknownEnumRawOnUpdate_throwsAndKeepsLocal() async throws {
+        let context = try makeContext()
+        let merger = SnapKeiMerger(context: context)
+        let syncId = UUID()
+        let t0 = Date()
+        try await merger.apply(SyncEnvelope(
+            entityType: "JournalEntry",
+            entityID: syncId.uuidString,
+            modifiedAt: t0,
+            data: try entryPayloadData(syncId: syncId, updatedAt: t0, amount: 1_100)
+        ))
+
+        var json = try #require(
+            JSONSerialization.jsonObject(
+                with: entryPayloadData(syncId: syncId, updatedAt: t0.addingTimeInterval(60), amount: 2_200)
+            ) as? [String: Any]
+        )
+        json["paymentMethodRaw"] = "futurePaymentMethod"
+        let data = try JSONSerialization.data(withJSONObject: json)
+
+        await #expect(throws: MergeError.self) {
+            try await merger.apply(SyncEnvelope(
+                entityType: "JournalEntry",
+                entityID: syncId.uuidString,
+                modifiedAt: t0.addingTimeInterval(60),
+                data: data
+            ))
+        }
+        let fetched = try context.fetch(FetchDescriptor<JournalEntry>())
+        #expect(fetched.count == 1)
+        #expect(fetched.first?.amountIncludingTax == 1_100)
+        #expect(fetched.first?.paymentMethodRaw == PaymentMethod.ownerLoan.rawValue)
+    }
+
+    @MainActor
+    @Test func apply_fixedAsset_unknownEnumRawOnUpdate_throwsAndKeepsLocal() async throws {
+        // 未知 treatment を保存すると fallback (.normalDepreciation) で誤った償却仕訳を
+        // 生成して同期で拡散しかねないため、update でも拒否する。
+        let context = try makeContext()
+        let merger = SnapKeiMerger(context: context)
+        let syncId = UUID()
+        let t0 = Date()
+        let asset = FixedAsset(
+            assetName: "リモートPC",
+            assetCategoryCode: "PC",
+            acquisitionDate: t0,
+            serviceStartDate: t0,
+            acquisitionAmount: 300_000,
+            usefulLifeYears: 4,
+            treatment: .lumpSumDepreciation,
+            syncId: syncId,
+            updatedAt: t0
+        )
+        try await merger.apply(SyncEnvelope(
+            entityType: "FixedAsset",
+            entityID: syncId.uuidString,
+            modifiedAt: t0,
+            data: try JSONEncoder.snapkeiSync.encode(FixedAssetPayload(from: asset))
+        ))
+
+        asset.updatedAt = t0.addingTimeInterval(60)
+        var json = try #require(
+            JSONSerialization.jsonObject(
+                with: JSONEncoder.snapkeiSync.encode(FixedAssetPayload(from: asset))
+            ) as? [String: Any]
+        )
+        json["treatmentRaw"] = "futureTreatment"
+        let data = try JSONSerialization.data(withJSONObject: json)
+
+        await #expect(throws: MergeError.self) {
+            try await merger.apply(SyncEnvelope(
+                entityType: "FixedAsset",
+                entityID: syncId.uuidString,
+                modifiedAt: asset.updatedAt,
+                data: data
+            ))
+        }
+        let fetched = try context.fetch(FetchDescriptor<FixedAsset>())
+        #expect(fetched.count == 1)
+        #expect(fetched.first?.treatmentRaw == AssetTreatment.lumpSumDepreciation.rawValue)
+    }
+
+    @MainActor
+    @Test func apply_staleJournalEntryWithUnknownEnum_isIgnoredWithoutError() async throws {
+        // 古い payload は updatedAt ガードで捨てられるだけ。未知 enum でも throw して
+        // カーソルを止めてはいけない（実体化しない envelope は無害）。
+        let context = try makeContext()
+        let merger = SnapKeiMerger(context: context)
+        let syncId = UUID()
+        let newer = Date()
+        let older = newer.addingTimeInterval(-3_600)
+        try await merger.apply(SyncEnvelope(
+            entityType: "JournalEntry",
+            entityID: syncId.uuidString,
+            modifiedAt: newer,
+            data: try entryPayloadData(syncId: syncId, updatedAt: newer, amount: 2_200)
+        ))
+
+        var json = try #require(
+            JSONSerialization.jsonObject(
+                with: entryPayloadData(syncId: syncId, updatedAt: older, amount: 1_100)
+            ) as? [String: Any]
+        )
+        json["taxCategoryRaw"] = "futureTaxCategory"
+        try await merger.apply(SyncEnvelope(
+            entityType: "JournalEntry",
+            entityID: syncId.uuidString,
+            modifiedAt: older,
+            data: try JSONSerialization.data(withJSONObject: json)
+        ))
+
+        let fetched = try context.fetch(FetchDescriptor<JournalEntry>())
+        #expect(fetched.count == 1)
+        #expect(fetched.first?.amountIncludingTax == 2_200)
+    }
+
+    @MainActor
+    @Test func apply_fixedAssetTombstoneWithUnknownEnum_isIgnoredWithoutError() async throws {
+        // ローカルに存在しない削除済み資産の tombstone は no-op。未知 enum でも
+        // throw せず捨てられること（存在しないレコードで同期が永久に詰まるのを防ぐ）。
+        let context = try makeContext()
+        let merger = SnapKeiMerger(context: context)
+        let syncId = UUID()
+        let t0 = Date()
+        let asset = FixedAsset(
+            assetName: "削除済み将来資産",
+            assetCategoryCode: "PC",
+            acquisitionDate: t0,
+            serviceStartDate: t0,
+            acquisitionAmount: 300_000,
+            usefulLifeYears: 4,
+            treatment: .normalDepreciation,
+            syncId: syncId,
+            updatedAt: t0,
+            deletedAt: t0
+        )
+        var json = try #require(
+            JSONSerialization.jsonObject(
+                with: JSONEncoder.snapkeiSync.encode(FixedAssetPayload(from: asset))
+            ) as? [String: Any]
+        )
+        json["treatmentRaw"] = "futureTreatment"
+        try await merger.apply(SyncEnvelope(
+            entityType: "FixedAsset",
+            entityID: syncId.uuidString,
+            modifiedAt: t0,
+            data: try JSONSerialization.data(withJSONObject: json)
+        ))
+
+        #expect(try context.fetch(FetchDescriptor<FixedAsset>()).isEmpty)
+    }
+
+    @MainActor
     @Test func apply_fixedAsset_insertAndTombstoneUpdate() async throws {
         let context = try makeContext()
         let merger = SnapKeiMerger(context: context)

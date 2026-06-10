@@ -15,11 +15,24 @@ public struct DepreciationAmount: Equatable, Sendable {
 }
 
 public enum DepreciationService {
+    // 年度・月の判定は報告サービス（KessanshoService 等）と同じ JST 基準。
+    private static let calendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Tokyo")!
+        return calendar
+    }()
+
     public static func annualAmount(for asset: FixedAsset, fiscalYear: Int) -> DepreciationAmount {
-        let calendar = Calendar(identifier: .gregorian)
         let acquisitionYear = calendar.component(.year, from: asset.serviceStartDate)
         if fiscalYear < acquisitionYear { return DepreciationAmount(full: 0, deductible: 0) }
         if asset.accumulatedDepreciation >= asset.acquisitionAmount { return DepreciationAmount(full: 0, deductible: 0) }
+        // 処分済み資産は処分年度の翌年以降は計上しない（処分年度内の月割は将来対応）。
+        // 一括償却資産は譲渡・除却後も残存年度の3年均等償却を継続する（所得税法施行令139条）。
+        if asset.treatment == .normalDepreciation,
+           let disposalDate = asset.disposalDate,
+           calendar.component(.year, from: disposalDate) < fiscalYear {
+            return DepreciationAmount(full: 0, deductible: 0)
+        }
 
         let fullBase: Double
         switch asset.treatment {

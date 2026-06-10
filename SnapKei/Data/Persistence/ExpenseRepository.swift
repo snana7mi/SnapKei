@@ -8,7 +8,6 @@ public protocol ExpenseRepository: Sendable {
     func search(criteria: ExpenseSearchCriteria) throws -> [JournalEntry]
     func nextEntryNumber(for fiscalYear: Int) throws -> Int
     func auditLogCount() throws -> Int
-    var changes: AsyncStream<Void> { get }
 }
 
 public struct ExpenseSearchCriteria: Sendable {
@@ -42,20 +41,26 @@ public struct ExpenseSearchCriteria: Sendable {
     }
 }
 
-public enum RepositoryError: Error, Equatable {
+public enum RepositoryError: Error, Equatable, LocalizedError {
     case fiscalYearClosed(Int)
+
+    public var errorDescription: String? {
+        switch self {
+        case .fiscalYearClosed(let year):
+            "\(year)年度は締め済みのため記帳できません。設定の年度管理から再開後にやり直してください。"
+        }
+    }
 }
 
+// 変更通知は SyncChangeNotifier.shared に一本化する。リポジトリは View ごとに
+// 使い捨てで生成されるため、インスタンス固有のストリームでは同期が発火しない。
 public final class SwiftDataExpenseRepository: ExpenseRepository, @unchecked Sendable {
     private let context: ModelContext
     private let deviceId: String
-    public nonisolated let changes: AsyncStream<Void>
-    private let changesContinuation: AsyncStream<Void>.Continuation
 
     public init(context: ModelContext, deviceId: String) {
         self.context = context
         self.deviceId = deviceId
-        (self.changes, self.changesContinuation) = AsyncStream.makeStream()
     }
 
     public func create(_ entry: JournalEntry, reason: String? = nil) throws {
@@ -78,7 +83,7 @@ public final class SwiftDataExpenseRepository: ExpenseRepository, @unchecked Sen
         )
         context.insert(log)
         try context.save()
-        changesContinuation.yield()
+        SyncChangeNotifier.shared.notify()
     }
 
     public func edit(_ entry: JournalEntry, applying change: () -> Void, reason: String?) throws {
@@ -98,7 +103,7 @@ public final class SwiftDataExpenseRepository: ExpenseRepository, @unchecked Sen
         )
         context.insert(log)
         try context.save()
-        changesContinuation.yield()
+        SyncChangeNotifier.shared.notify()
     }
 
     public func void(_ entry: JournalEntry, reason: String?) throws {
@@ -117,7 +122,7 @@ public final class SwiftDataExpenseRepository: ExpenseRepository, @unchecked Sen
         )
         context.insert(log)
         try context.save()
-        changesContinuation.yield()
+        SyncChangeNotifier.shared.notify()
     }
 
     public func search(criteria: ExpenseSearchCriteria) throws -> [JournalEntry] {

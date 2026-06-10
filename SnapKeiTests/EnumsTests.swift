@@ -50,3 +50,21 @@ struct EnumsTests {
         #expect(AccountType.expense.rawValue == "expense")
     }
 }
+
+@Suite("PaymentMethod → 貸方科目デフォルト")
+struct PaymentMethodCreditAccountTests {
+
+    @Test func mapsEachPaymentMethodToSeededCreditAccount() {
+        #expect(PaymentMethod.cash.defaultCreditAccountCode == AccountCode.cash)
+        #expect(PaymentMethod.creditCard.defaultCreditAccountCode == AccountCode.payable)
+        #expect(PaymentMethod.bankTransfer.defaultCreditAccountCode == AccountCode.bankDeposit)
+        #expect(PaymentMethod.ownerLoan.defaultCreditAccountCode == AccountCode.ownerLoan)
+        #expect(PaymentMethod.accountsPayable.defaultCreditAccountCode == AccountCode.payable)
+    }
+
+    @Test func ambiguousMethodsHaveNoDefault() {
+        // 事業主貸・その他は経費の貸方として一意に決まらないため、選択中の科目を維持する。
+        #expect(PaymentMethod.ownerWithdraw.defaultCreditAccountCode == nil)
+        #expect(PaymentMethod.other.defaultCreditAccountCode == nil)
+    }
+}

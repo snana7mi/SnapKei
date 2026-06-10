@@ -19,6 +19,7 @@ public struct ConfirmationForm: View {
     @State private var transactionDescription = ""
     @State private var debitAccountCode = "5110"
     @State private var creditAccountCode = "3210"
+    @State private var userEditedCreditAccount = false
     @State private var invoiceRegistrationNumber = ""
     @State private var businessAllocationRate = 1.0
     @State private var businessAllocationPercentText = "100"
@@ -72,7 +73,7 @@ public struct ConfirmationForm: View {
                         Text("\(account.code) \(account.nameJa)").tag(account.code)
                     }
                 }
-                Picker("貸方科目", selection: $creditAccountCode) {
+                Picker("貸方科目", selection: creditSelectionBinding) {
                     ForEach(accounts.filter { [.asset, .liability, .equity, .revenue].contains($0.accountType) }) { account in
                         Text("\(account.code) \(account.nameJa)").tag(account.code)
                     }
@@ -138,6 +139,9 @@ public struct ConfirmationForm: View {
         .onChange(of: debitAccountCode) { _, newCode in
             applyAllocationDefault(forDebitCode: newCode)
         }
+        .onChange(of: paymentMethod) { _, newMethod in
+            applyCreditDefault(for: newMethod)
+        }
     }
 
     private var isValid: Bool {
@@ -166,8 +170,29 @@ public struct ConfirmationForm: View {
         } else {
             debitAccountCode = firstExpenseCode() ?? debitAccountCode
         }
-        creditAccountCode = firstCreditCode() ?? creditAccountCode
+        applyCreditDefault(for: paymentMethod)
         applyAllocationDefault(forDebitCode: debitAccountCode)
+    }
+
+    /// 貸方科目 Picker の手動変更を記録し、以後 applyCreditDefault が上書きしないようにする。
+    private var creditSelectionBinding: Binding<String> {
+        Binding(
+            get: { creditAccountCode },
+            set: { newValue in
+                creditAccountCode = newValue
+                userEditedCreditAccount = true
+            }
+        )
+    }
+
+    /// 支払方法に対応する貸方科目を選ぶ。ユーザーが貸方科目を手動で選んだ後は
+    /// 上書きせず、選択が無効な場合のみ修復する。
+    private func applyCreditDefault(for method: PaymentMethod) {
+        if !userEditedCreditAccount, let mapped = method.defaultCreditAccountCode, isValidCreditCode(mapped) {
+            creditAccountCode = mapped
+        } else if !isValidCreditCode(creditAccountCode) {
+            creditAccountCode = firstCreditCode() ?? creditAccountCode
+        }
     }
 
     private func applyAllocationDefault(forDebitCode code: String) {
@@ -185,19 +210,10 @@ public struct ConfirmationForm: View {
     private func save() {
         commitAllocationPercent()
         guard let amount = Int(amountIncludingTaxText) else { return }
-        let rate = taxCategory.taxRate
-        let amountExcludingTax: Int
-        let consumptionTax: Int
-        let total: Int
-        if priceEntryMode == .taxIncluded {
-            amountExcludingTax = Int((Double(amount) / (1 + rate)).rounded(.down))
-            consumptionTax = amount - amountExcludingTax
-            total = amount
-        } else {
-            amountExcludingTax = amount
-            consumptionTax = Int((Double(amount) * rate).rounded(.down))
-            total = amount + consumptionTax
-        }
+        let split = TaxSplit.split(amount: amount, mode: priceEntryMode, rate: taxCategory.taxRate)
+        let amountExcludingTax = split.excludingTax
+        let consumptionTax = split.tax
+        let total = split.total
 
         let allocation = TaxAllocation.allocate(total: total, excludingTax: amountExcludingTax, rate: businessAllocationRate)
         let allocatedTotal = allocation.total
@@ -207,7 +223,7 @@ public struct ConfirmationForm: View {
 
         onSave(JournalEntry(
             entryNumber: 0,
-            fiscalYear: Calendar(identifier: .gregorian).component(.year, from: transactionDate),
+            fiscalYear: FiscalYearRule.year(for: transactionDate),
             transactionDate: transactionDate,
             isLateEntry: ComplianceService.daysUntilScanDeadline(receiptDate: transactionDate) < 0,
             debitAccountCode: isValidDebitCode(debitAccountCode) ? debitAccountCode : (firstExpenseCode() ?? debitAccountCode),
@@ -245,15 +261,5 @@ public struct ConfirmationForm: View {
 
     private func firstCreditCode() -> String? {
         accounts.first { [.asset, .liability, .equity, .revenue].contains($0.accountType) && $0.isActive }?.code
-    }
-}
-
-private extension TaxCategory {
-    var taxRate: Double {
-        switch self {
-        case .standard10: 0.10
-        case .reduced8: 0.08
-        case .nonTaxable, .outOfScope: 0
-        }
     }
 }

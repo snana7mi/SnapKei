@@ -13,7 +13,6 @@ final class MemoryExpenseRepository: ExpenseRepository, @unchecked Sendable {
     var entries: [JournalEntry]
     var created: [JournalEntry] = []
     var voided: [JournalEntry] = []
-    let changes: AsyncStream<Void> = AsyncStream { $0.finish() }
 
     init(entries: [JournalEntry] = []) {
         self.entries = entries
@@ -95,22 +94,78 @@ struct UIServiceViewModelTests {
         )
     }
 
+    /// 集計テスト用の科目種別: 1=資産, 2=負債, 3=資本, 4=収益, 5=費用（シード表の番台規則）。
+    private func accountType(_ code: String) -> AccountType? {
+        switch code.first {
+        case "1": .asset
+        case "2": .liability
+        case "3": .equity
+        case "4": .revenue
+        case "5": .expense
+        default: nil
+        }
+    }
+
     @MainActor
-    @Test func homeSummaryTotalsEntriesForSelectedMonth() throws {
+    @Test func homeSummarySeparatesIncomeExpenseAndIgnoresTransfers() throws {
         let cal = Calendar(identifier: .gregorian)
         let may = cal.date(from: DateComponents(year: 2026, month: 5, day: 10))!
         let mayEnd = cal.date(from: DateComponents(year: 2026, month: 5, day: 31, hour: 12))!
         let june = cal.date(from: DateComponents(year: 2026, month: 6, day: 1))!
-        let vm = HomeViewModel(repository: MemoryExpenseRepository(entries: [entry(amount: 1100, date: may), entry(amount: 2200, date: may), entry(amount: 3300, date: mayEnd), entry(amount: 999, date: june)]))
+        let vm = HomeViewModel(repository: MemoryExpenseRepository(entries: [
+            entry(amount: 1100, date: may),
+            entry(amount: 2200, date: may),
+            entry(amount: 3300, date: mayEnd),
+            entry(amount: 11_000, date: may, debit: "1210", credit: "4110"),
+            entry(amount: 50_000, date: may, debit: "1110", credit: "1210"),
+            entry(amount: 999, date: june),
+        ]))
 
-        let summary = try vm.monthlySummary(year: 2026, month: 5)
+        let summary = try vm.monthlySummary(year: 2026, month: 5, accountTypes: accountType)
 
-        #expect(summary.entryCount == 3)
-        #expect(summary.totalIncludingTax == 6600)
+        #expect(summary.entryCount == 5)
+        #expect(summary.expenseTotal == 6600)
+        #expect(summary.incomeTotal == 11_000)
+        #expect(summary.expenseConsumptionTax == 600)
     }
 
     @MainActor
-    @Test func expenseListFiltersBySearchTextAndComputesTotal() {
+    @Test func homeByAccountChartShowsOnlyExpenseEntries() throws {
+        let cal = Calendar(identifier: .gregorian)
+        let may = cal.date(from: DateComponents(year: 2026, month: 5, day: 10))!
+        let vm = HomeViewModel(repository: MemoryExpenseRepository(entries: [
+            entry(amount: 1100, date: may),
+            entry(amount: 11_000, date: may, debit: "1210", credit: "4110"),
+            entry(amount: 50_000, date: may, debit: "1110", credit: "1210"),
+        ]))
+
+        let byAccount = try vm.byDebitAccount(
+            year: 2026, month: 5,
+            accountLookup: { $0 },
+            accountTypes: accountType
+        )
+
+        #expect(byAccount.map(\.id) == ["5110"])
+        #expect(byAccount.first?.amount == 1100)
+    }
+
+    @MainActor
+    @Test func overdueWarningsOnlyApplyToReceiptBackedEntries() throws {
+        let cal = Calendar(identifier: .gregorian)
+        let old = cal.date(from: DateComponents(year: 2026, month: 1, day: 10))!
+        let today = cal.date(from: DateComponents(year: 2026, month: 6, day: 10))!
+        let receiptEntry = entry(date: old)
+        receiptEntry.receiptImagePath = "2026/receipt.jpg"
+        let manualEntry = entry(date: old)
+        let vm = HomeViewModel(repository: MemoryExpenseRepository(entries: [receiptEntry, manualEntry]))
+
+        let overdue = try vm.overdueEntries(today: today)
+
+        #expect(overdue.map(\.receiptImagePath) == ["2026/receipt.jpg"])
+    }
+
+    @MainActor
+    @Test func expenseListFiltersBySearchTextAndComputesTotals() {
         let vm = ExpenseListViewModel(repository: MemoryExpenseRepository(entries: [
             entry(counterparty: "Apple", desc: "Cloud"),
             entry(counterparty: "Amazon", desc: "Office", amount: 550),
@@ -120,7 +175,24 @@ struct UIServiceViewModelTests {
         vm.refresh()
 
         #expect(vm.entries.map(\.counterpartyName) == ["Apple"])
-        #expect(vm.totalAmount == 1100)
+        let totals = vm.totals(accountTypes: accountType)
+        #expect(totals.expense == 1100)
+        #expect(totals.income == 0)
+    }
+
+    @MainActor
+    @Test func expenseListTotalsSeparateIncome() {
+        let vm = ExpenseListViewModel(repository: MemoryExpenseRepository(entries: [
+            entry(counterparty: "Apple", desc: "Cloud"),
+            entry(counterparty: "クライアントA", desc: "売上", amount: 110_000, debit: "1210", credit: "4110"),
+            entry(counterparty: "自分", desc: "資金移動", amount: 50_000, debit: "1110", credit: "1210"),
+        ]))
+
+        vm.refresh()
+
+        let totals = vm.totals(accountTypes: accountType)
+        #expect(totals.expense == 1100)
+        #expect(totals.income == 110_000)
     }
 
     @MainActor
