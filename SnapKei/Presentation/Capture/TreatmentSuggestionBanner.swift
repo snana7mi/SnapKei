@@ -36,9 +36,9 @@ public struct TreatmentSuggestionBanner: View {
         case .lumpSumDepreciation:
             "10-20万円未満の固定資産は3年均等償却が選択可能です。"
         case .smallAmountFullExpense:
-            "20-40万円未満の固定資産は青色申告者の特例で一括費用化できます。"
+            "20-30万円未満の固定資産は青色申告者の特例で一括費用化できます。"
         case .normalDepreciation:
-            "取得価額40万円以上は耐用年数に応じた減価償却が必要です。"
+            "取得価額30万円以上は耐用年数に応じた減価償却が必要です。"
         }
     }
 }

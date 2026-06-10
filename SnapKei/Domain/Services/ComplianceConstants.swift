@@ -1,7 +1,8 @@
 import Foundation
 
 public enum ComplianceConstants {
-    public nonisolated static let smallDepreciableAssetThreshold = 400_000
+    // 少額減価償却資産の特例: 取得価額30万円未満（租税特別措置法28条の2）。
+    public nonisolated static let smallDepreciableAssetThreshold = 300_000
     public nonisolated static let smallDepreciableAnnualCap = 3_000_000
     public nonisolated static let smallDepreciableExpiry = parseISO("2029-03-31")
     public nonisolated static let lumpSumDepreciationThreshold = 200_000

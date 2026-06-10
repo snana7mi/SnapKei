@@ -105,6 +105,7 @@ public enum KessanshoService {
             assets: assets,
             targetYearEntries: targetYearEntries,
             entriesThroughFiscalYear: nonVoidedEntriesThroughFiscalYear,
+            allNonVoidedEntries: entries.filter { !$0.isVoided },
             calendar: calendar
         )
         let rentDetails = rentRows(entries: targetYearEntries)
@@ -169,6 +170,7 @@ public enum KessanshoService {
         assets: [FixedAsset],
         targetYearEntries: [JournalEntry],
         entriesThroughFiscalYear: [JournalEntry],
+        allNonVoidedEntries: [JournalEntry],
         calendar: Calendar
     ) -> [KessanshoReport.DepreciationRow] {
         let ymFormatter = acquisitionYearMonthFormatter
@@ -182,6 +184,11 @@ public enum KessanshoService {
                 if !targetEntries.isEmpty {
                     let postedThroughYear = postedDepreciationEntries(for: asset, in: entriesThroughFiscalYear)
                     let postedAccumulated = postedThroughYear.reduce(0) { $0 + $1.amountIncludingTax }
+                    // 引継ぎ資産は仕訳の無い既存償却累計を持つ。現在の累計から全計上済み額
+                    // （全年度）を引いた差分が引継ぎベース（年度に依存しない定数）。
+                    let allPostedTotal = postedDepreciationEntries(for: asset, in: allNonVoidedEntries)
+                        .reduce(0) { $0 + $1.amountIncludingTax }
+                    let carriedBase = max(0, asset.accumulatedDepreciation - allPostedTotal)
                     let yearDepreciation = targetEntries.reduce(0) { $0 + $1.amountIncludingTax }
                     let deductibleAmount = targetEntries.reduce(0) {
                         $0 + ($1.debitAccountCode == AccountCode.depreciationExpense ? $1.amountIncludingTax : 0)
@@ -196,7 +203,7 @@ public enum KessanshoService {
                         yearDepreciation: yearDepreciation,
                         businessRatePercent: Int((asset.businessAllocationRate * 100).rounded()),
                         deductibleAmount: deductibleAmount,
-                        yearEndBalance: max(0, asset.acquisitionAmount - postedAccumulated),
+                        yearEndBalance: max(0, asset.acquisitionAmount - carriedBase - postedAccumulated),
                         isPosted: postedDepreciationIsComplete(
                             asset: asset,
                             fiscalYear: fiscalYear,

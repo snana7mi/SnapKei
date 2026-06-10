@@ -85,4 +85,13 @@ struct ComplianceServiceTests {
     @Test func suggestAssetTreatment_400k_boundary_is_normal() {
         #expect(ComplianceService.suggestAssetTreatment(amount: 400_000, acquisitionDate: date("2026-05-16")) == .normalDepreciation)
     }
+
+    @Test func suggestAssetTreatment_300k_boundary_is_normal() {
+        // 少額減価償却資産の特例は取得価額30万円未満（措置法28条の2）。
+        #expect(ComplianceService.suggestAssetTreatment(amount: 300_000, acquisitionDate: date("2026-05-16")) == .normalDepreciation)
+    }
+
+    @Test func suggestAssetTreatment_299999_within_expiry_is_smallAmount() {
+        #expect(ComplianceService.suggestAssetTreatment(amount: 299_999, acquisitionDate: date("2026-05-16")) == .smallAmountFullExpense)
+    }
 }

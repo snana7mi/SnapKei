@@ -8,6 +8,7 @@ public struct ExpenseListView: View {
     @State private var viewModel: ExpenseListViewModel?
     @State private var showFilter = false
     @State private var showManualEntry = false
+    @State private var voidErrorMessage: String?
 
     public init() {}
 
@@ -73,6 +74,14 @@ public struct ExpenseListView: View {
         .sheet(isPresented: $showManualEntry, onDismiss: { viewModel.refresh() }) {
             ManualEntryView()
         }
+        .alert(
+            "取消できません",
+            isPresented: Binding(get: { voidErrorMessage != nil }, set: { if !$0 { voidErrorMessage = nil } })
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(voidErrorMessage ?? "")
+        }
         .task { viewModel.refresh() }
     }
 
@@ -89,6 +98,12 @@ public struct ExpenseListView: View {
     }
 
     private func voidEntry(_ entry: JournalEntry, viewModel: ExpenseListViewModel) {
+        // 資産連動の仕訳（取得・処分・償却）を単独で取消すると固定資産台帳と
+        // 帳簿が乖離する。資産側の削除/処分から操作させる。
+        guard entry.relatedFixedAssetId == nil else {
+            voidErrorMessage = "固定資産に関連する仕訳です。設定の固定資産台帳から資産の削除・処分を行ってください。"
+            return
+        }
         let repository = SwiftDataExpenseRepository(context: context, deviceId: DeviceID.current)
         try? repository.void(entry, reason: "ユーザー操作")
         viewModel.refresh()
