@@ -157,8 +157,9 @@ struct DepreciationServiceTests {
         #expect(DepreciationService.annualAmount(for: asset, fiscalYear: 2027).full == 50_000)
     }
 
-    @Test func disposedAsset_disposalYearItself_stillDepreciates() {
-        // 処分年度は計上対象のまま（月割計算は将来対応）。翌年以降のみ停止する。
+    @Test func disposedNormalAsset_disposalYearItself_doesNotDepreciate() {
+        // 処分時に残存簿価（当年分を含む）を事業主貸で転出するため、
+        // 処分年度から償却を停止しないと二重計上になる（月割は将来対応）。
         let asset = FixedAsset(
             assetName: "売却済みカメラ",
             assetCategoryCode: "CAMERA",
@@ -169,7 +170,8 @@ struct DepreciationServiceTests {
             treatment: .normalDepreciation,
             disposalDate: date("2026-06-30")
         )
-        #expect(DepreciationService.annualAmount(for: asset, fiscalYear: 2026).full == 100_000)
+        #expect(DepreciationService.annualAmount(for: asset, fiscalYear: 2026).full == 0)
+        #expect(DepreciationService.annualAmount(for: asset, fiscalYear: 2025).full == 100_000)
     }
 
     @Test func annualAmount_lumpSum_splitsToo() {

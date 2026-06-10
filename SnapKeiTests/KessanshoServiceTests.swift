@@ -271,6 +271,38 @@ struct KessanshoServiceTests {
         #expect(rows[0].isPosted)
     }
 
+    @Test func depreciation_carriedOverAsset_yearEndBalanceIncludesCarriedBase() {
+        // 引継ぎ資産（仕訳なしの既存償却累計 300,000）に最終年 100,000 を計上した後、
+        // 期末残高は 0 になるべき（計上済み仕訳だけから計算すると 300,000 と過大表示）。
+        let assetId = UUID(uuidString: "77777777-7777-7777-7777-777777777777")!
+        let asset = FixedAsset(
+            assetName: "引継ぎPC",
+            assetCategoryCode: "PC",
+            acquisitionDate: date("2023-01-01"),
+            serviceStartDate: date("2023-01-01"),
+            acquisitionAmount: 400_000,
+            usefulLifeYears: 4,
+            treatment: .normalDepreciation,
+            accumulatedDepreciation: 400_000,
+            bookValue: 0,
+            syncId: assetId
+        )
+        let posted = entry(
+            AccountCode.depreciationExpense,
+            AccountCode.accumulatedDepreciation,
+            100_000,
+            day: "2026-12-31",
+            relatedAssetId: assetId,
+            sourceType: .depreciation
+        )
+
+        let rows = build(entries: [posted], assets: [asset]).depreciation
+
+        #expect(rows.count == 1)
+        #expect(rows[0].yearDepreciation == 100_000)
+        #expect(rows[0].yearEndBalance == 0)
+    }
+
     @Test func depreciation_lumpSumAsset_isLabeledAsLumpSum() {
         let assetId = UUID(uuidString: "66666666-6666-6666-6666-666666666666")!
         let asset = FixedAsset(

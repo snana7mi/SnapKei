@@ -26,11 +26,12 @@ public enum DepreciationService {
         let acquisitionYear = calendar.component(.year, from: asset.serviceStartDate)
         if fiscalYear < acquisitionYear { return DepreciationAmount(full: 0, deductible: 0) }
         if asset.accumulatedDepreciation >= asset.acquisitionAmount { return DepreciationAmount(full: 0, deductible: 0) }
-        // 処分済み資産は処分年度の翌年以降は計上しない（処分年度内の月割は将来対応）。
+        // 処分済み資産は処分年度から計上しない: 処分時に残存簿価（当年分を含む）を
+        // 事業主貸で転出するため、処分年度に計上すると二重計上になる（月割は将来対応）。
         // 一括償却資産は譲渡・除却後も残存年度の3年均等償却を継続する（所得税法施行令139条）。
         if asset.treatment == .normalDepreciation,
            let disposalDate = asset.disposalDate,
-           calendar.component(.year, from: disposalDate) < fiscalYear {
+           calendar.component(.year, from: disposalDate) <= fiscalYear {
             return DepreciationAmount(full: 0, deductible: 0)
         }
 
