@@ -1,6 +1,6 @@
 import Foundation
 
-/// 訂正履歴の before/after スナップショットからフィールド級の差分を導く純関数。
+/// 訂正履歴の before/after スナップショットからフィールド級の差分を導く（決定的・副作用なし、MainActor 隔離）。
 /// EntryDetailView（変更履歴）と ActivityLogView（訂正・削除履歴）が共用する。
 /// 優良電子帳簿の「訂正・削除の事実と内容が確認できること」の表示部分を担う。
 nonisolated public enum EntryChangeDiff {
@@ -18,6 +18,7 @@ nonisolated public enum EntryChangeDiff {
 
     /// SystemActivityLog の Data 入口。デコード不能（欠損・破損）は nil を返し、
     /// 呼び出し側が「詳細を表示できません」と降級表示する。クラッシュ禁止。
+    /// エンコーダ/デコーダは ExpenseRepository の JSONEncoder() 既定戦略と対で固定（変更すると旧ログが読めなくなる）。
     @MainActor
     public static func changes(
         beforeData: Data?,
@@ -36,6 +37,13 @@ nonisolated public enum EntryChangeDiff {
     // @testable import SnapKei でテストから参照可能。
     // @MainActor: SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor のため JournalEntrySnapshot の
     // Codable 準拠および NumberFormatter の利用に MainActor が必要。
+
+    /// diff 対象外のスナップショットフィールド（追加時はここで diff するか除外するか判断すること）:
+    /// - 派生値: transitionalMeasureRate（invoiceQualified+transactionDate から導出。ドライバー側を diff 済み）、
+    ///   isLateEntry（inputDate から導出）
+    /// - 編集不可: fiscalYear / entryNumber / receiptImagePath / receiptImageHash /
+    ///   relatedFixedAssetId / sourceTypeRaw / inputDate
+    /// - メタデータ: id / createdAt / updatedAt / syncId
     @MainActor
     static func changes(
         before: JournalEntrySnapshot,
@@ -71,7 +79,7 @@ nonisolated public enum EntryChangeDiff {
             before.originalAmountIncludingTax.map(YenFormat.string) ?? none,
             after.originalAmountIncludingTax.map(YenFormat.string) ?? none
         )
-        add("状態", voidedLabel(before.isVoided), voidedLabel(after.isVoided))
+        add("状態", voidedLabel(before.isVoided), voidedLabel(after.isVoided)) // void ログは afterSnapshot=nil なので Data 入口経由では到達しない（防御的に保持）
         return result
     }
 
@@ -79,7 +87,7 @@ nonisolated public enum EntryChangeDiff {
 
     @MainActor private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(identifier: "Asia/Tokyo")
         formatter.dateFormat = "yyyy/MM/dd"
         return formatter
