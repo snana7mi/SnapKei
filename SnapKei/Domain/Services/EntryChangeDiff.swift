@@ -57,9 +57,9 @@ nonisolated public enum EntryChangeDiff {
         add("メモ", before.memo ?? none, after.memo ?? none)
         add("借方", account(before.debitAccountCode), account(after.debitAccountCode))
         add("貸方", account(before.creditAccountCode), account(after.creditAccountCode))
-        add("税込金額", yenString(before.amountIncludingTax), yenString(after.amountIncludingTax))
-        add("税抜金額", yenString(before.amountExcludingTax), yenString(after.amountExcludingTax))
-        add("消費税", yenString(before.consumptionTax), yenString(after.consumptionTax))
+        add("税込金額", YenFormat.string(before.amountIncludingTax), YenFormat.string(after.amountIncludingTax))
+        add("税抜金額", YenFormat.string(before.amountExcludingTax), YenFormat.string(after.amountExcludingTax))
+        add("消費税", YenFormat.string(before.consumptionTax), YenFormat.string(after.consumptionTax))
         add("税区分", taxLabel(before.taxCategoryRaw), taxLabel(after.taxCategoryRaw))
         add("入力方式", modeLabel(before.priceEntryModeRaw), modeLabel(after.priceEntryModeRaw))
         add("支払方法", paymentLabel(before.paymentMethodRaw), paymentLabel(after.paymentMethodRaw))
@@ -68,8 +68,8 @@ nonisolated public enum EntryChangeDiff {
         add("事業割合", percentString(before.businessAllocationRate), percentString(after.businessAllocationRate))
         add(
             "按分前金額",
-            before.originalAmountIncludingTax.map(yenString) ?? none,
-            after.originalAmountIncludingTax.map(yenString) ?? none
+            before.originalAmountIncludingTax.map(YenFormat.string) ?? none,
+            after.originalAmountIncludingTax.map(YenFormat.string) ?? none
         )
         add("状態", voidedLabel(before.isVoided), voidedLabel(after.isVoided))
         return result
@@ -77,31 +77,13 @@ nonisolated public enum EntryChangeDiff {
 
     // MARK: - Formatting
 
-    // nonisolated(unsafe): DateFormatter は init 後は読み取り専用のため実質スレッドセーフ。
-    // Swift 6 strict concurrency の "non-Sendable stored in nonisolated" 警告を抑制する。
-    nonisolated(unsafe) private static let dateFormatter: DateFormatter = {
+    @MainActor private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ja_JP")
         formatter.timeZone = TimeZone(identifier: "Asia/Tokyo")
         formatter.dateFormat = "yyyy/MM/dd"
         return formatter
     }()
-
-    // NumberFormatter.string は内部キャッシュがあるためスレッドセーフではないが、
-    // 差分表示は UI スレッドから呼ばれる想定かつ同時呼び出しが起きないため許容する。
-    nonisolated(unsafe) private static let yenFormatter: NumberFormatter = {
-        let formatter = NumberFormatter()
-        formatter.locale = Locale(identifier: "ja_JP")
-        formatter.numberStyle = .currency
-        formatter.currencySymbol = "¥"
-        formatter.maximumFractionDigits = 0
-        return formatter
-    }()
-
-    @MainActor
-    private static func yenString(_ amount: Int) -> String {
-        yenFormatter.string(from: NSNumber(value: amount)) ?? "¥\(amount)"
-    }
 
     @MainActor
     private static func dateString(_ date: Date) -> String { dateFormatter.string(from: date) }
