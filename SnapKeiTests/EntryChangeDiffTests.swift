@@ -105,4 +105,41 @@ struct EntryChangeDiffTests {
         #expect(EntryChangeDiff.changes(beforeData: nil, afterData: valid, accountName: noName) == nil)
         #expect(EntryChangeDiff.changes(beforeData: valid, afterData: Data("x".utf8), accountName: noName) == nil)
     }
+
+    // MARK: - スキーマ漂流ガード
+
+    @Test func snapshotSchema_isExplicitlyClassified() {
+        // スナップショットに新フィールドが増えたら、diff するか除外するかをここで宣言し直す。
+        let diffed: Set<String> = [
+            "transactionDate", "counterpartyName", "transactionDescription", "memo",
+            "debitAccountCode", "creditAccountCode",
+            "amountIncludingTax", "amountExcludingTax", "consumptionTax",
+            "taxCategoryRaw", "priceEntryModeRaw", "paymentMethodRaw",
+            "invoiceRegistrationNumber", "invoiceQualified",
+            "businessAllocationRate", "originalAmountIncludingTax", "isVoided",
+        ]
+        let excluded: Set<String> = [
+            "transitionalMeasureRate", "isLateEntry",
+            "fiscalYear", "entryNumber", "receiptImagePath", "receiptImageHash",
+            "relatedFixedAssetId", "sourceTypeRaw", "inputDate",
+            "id", "createdAt", "updatedAt", "syncId",
+        ]
+        let actual = Set(Mirror(reflecting: JournalEntrySnapshot(from: makeEntry())).children.compactMap(\.label))
+        #expect(actual == diffed.union(excluded))
+        #expect(diffed.isDisjoint(with: excluded))
+    }
+
+    // MARK: - タイムゾーン境界
+
+    @Test func dateChange_formatsInJST() {
+        let entry = makeEntry()
+        // UTC 2026-06-10 23:00 = JST 2026-06-11 08:00 — UTC と日付がずれる時刻で境界を固定する。
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        let before = snapshot(entry)
+        entry.transactionDate = utc.date(from: DateComponents(year: 2026, month: 6, day: 10, hour: 23))!
+        let changes = EntryChangeDiff.changes(before: before, after: snapshot(entry), accountName: noName)
+        let dateChange = changes.first { $0.label == "取引日" }
+        #expect(dateChange?.new == "2026/06/11")
+    }
 }
