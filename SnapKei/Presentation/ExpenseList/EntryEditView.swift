@@ -35,7 +35,9 @@ struct EntryEditView: View {
     @FocusState private var allocationFieldFocused: Bool
 
     /// キャンセル確認・保存ボタン活性の基準となる初期値（@State と同じ導出で固定）。
-    private let initialValues: InitialValues
+    /// let だと親 body の再評価で再 init された際に「現在値」へ再基準化されてしまう
+    /// （@State は保持されるのに基準だけズレて hasChanges が壊れる）ため @State で一度だけ確定する。
+    @State private var initialValues: InitialValues
 
     private struct InitialValues {
         let transactionDate: Date
@@ -85,7 +87,7 @@ struct EntryEditView: View {
             invoiceRegistrationNumber: entry.invoiceRegistrationNumber ?? "",
             businessAllocationPercentText: String(Int((entry.businessAllocationRate * 100).rounded()))
         )
-        self.initialValues = initial
+        _initialValues = State(initialValue: initial)
 
         _transactionDate = State(initialValue: initial.transactionDate)
         _counterpartyName = State(initialValue: initial.counterpartyName)
@@ -177,6 +179,11 @@ struct EntryEditView: View {
                                 }
                                 .onSubmit(commitAllocationPercent)
                             Text("%").foregroundStyle(.secondary)
+                        }
+                        if businessAllocationRate < 1, let amount = Int(amountText) {
+                            Text("仕訳計上額: ¥\(Int(Double(amount) * businessAllocationRate))")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -324,6 +331,7 @@ struct EntryEditView: View {
                 entry.originalAmountIncludingTax = allocationRate < 1 ? split.total : nil
             }, reason: reason.isEmpty ? "ユーザー操作" : reason)
             dismiss()
+            isSaving = false
         } catch {
             saveErrorMessage = error.localizedDescription
             isSaving = false
