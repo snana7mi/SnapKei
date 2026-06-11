@@ -33,3 +33,19 @@ struct YenFormatTests {
         #expect(YenFormat.string(-5_000) == "-¥5,000")
     }
 }
+
+@Suite("FiscalYearRule — dateRange")
+struct FiscalYearRuleDateRangeTests {
+
+    @Test func rangeBoundsBelongToTheYear() {
+        let range = FiscalYearRule.dateRange(for: 2026)
+        #expect(FiscalYearRule.year(for: range.lowerBound) == 2026)
+        #expect(FiscalYearRule.year(for: range.upperBound) == 2026)
+    }
+
+    @Test func justOutsideBounds_belongToAdjacentYears() {
+        let range = FiscalYearRule.dateRange(for: 2026)
+        #expect(FiscalYearRule.year(for: range.lowerBound.addingTimeInterval(-1)) == 2025)
+        #expect(FiscalYearRule.year(for: range.upperBound.addingTimeInterval(1)) == 2027)
+    }
+}
