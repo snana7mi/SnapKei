@@ -20,6 +20,7 @@ public struct ComplianceSection: View {
                 .onChange(of: hasFiledNotification) { _, value in UserDefaults.standard.set(value, forKey: "controlRoute.hasFiledOptimalBookNotification") }
             Toggle("e-Tax で申告予定", isOn: $willUseEtax)
                 .onChange(of: willUseEtax) { _, value in UserDefaults.standard.set(value, forKey: "controlRoute.willUseEtax") }
+            NavigationLink("訂正・削除履歴") { ActivityLogView() }
         }
     }
 }
