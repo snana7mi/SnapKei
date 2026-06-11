@@ -12,4 +12,13 @@ nonisolated public enum FiscalYearRule {
     public static func year(for date: Date) -> Int {
         calendar.component(.year, from: date)
     }
+
+    /// 年度内の日付範囲（JST、1/1 00:00:00 〜 12/31 23:59:59）。
+    /// 編集フォームの DatePicker が跨年変更を物理的に禁止するために使う。
+    public static func dateRange(for year: Int) -> ClosedRange<Date> {
+        let start = calendar.date(from: DateComponents(year: year, month: 1, day: 1))!
+        let end = calendar.date(
+            from: DateComponents(year: year, month: 12, day: 31, hour: 23, minute: 59, second: 59))!
+        return start...end
+    }
 }
