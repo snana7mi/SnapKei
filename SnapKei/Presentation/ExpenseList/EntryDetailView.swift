@@ -10,6 +10,10 @@ struct EntryDetailView: View {
 
     let entry: JournalEntry
 
+    @State private var showEdit = false
+    @Query private var logs: [SystemActivityLog]
+    @Query private var closures: [FiscalYearClosure]
+
     @State private var showViewer = false
     @State private var showVoidDialog = false
     @State private var voidReason = ""
@@ -19,6 +23,19 @@ struct EntryDetailView: View {
     @State private var attachment: ReceiptAttachment?
     @State private var thumbnail: UIImage?
     @State private var attachmentLoaded = false
+
+    init(entry: JournalEntry) {
+        self.entry = entry
+        let entryId: UUID? = entry.id
+        _logs = Query(FetchDescriptor<SystemActivityLog>(
+            predicate: #Predicate { $0.targetEntryId == entryId },
+            sortBy: [SortDescriptor(\.occurredAt, order: .reverse)]
+        ))
+        let year = entry.fiscalYear
+        _closures = Query(FetchDescriptor<FiscalYearClosure>(
+            predicate: #Predicate { $0.fiscalYear == year && $0.deletedAt == nil }
+        ))
+    }
 
     var body: some View {
         NavigationStack {
@@ -94,6 +111,14 @@ struct EntryDetailView: View {
                         }
                     }
                 }
+
+                if !logs.isEmpty {
+                    Section("変更履歴") {
+                        ForEach(logs) { log in
+                            ActivityLogRowView(log: log, accountName: lookupAccountName)
+                        }
+                    }
+                }
             }
             .navigationTitle("仕訳詳細")
             .navigationBarTitleDisplayMode(.inline)
@@ -115,6 +140,11 @@ struct EntryDetailView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("閉じる") { dismiss() } }
+                ToolbarItem(placement: .primaryAction) {
+                    if canEdit {
+                        Button("編集") { showEdit = true }
+                    }
+                }
             }
             .alert("仕訳を取消しますか？", isPresented: $showVoidDialog) {
                 TextField("理由（任意）", text: $voidReason)
@@ -130,6 +160,9 @@ struct EntryDetailView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(actionErrorMessage ?? "")
+            }
+            .sheet(isPresented: $showEdit) {
+                EntryEditView(entry: entry)
             }
             .fullScreenCover(isPresented: $showViewer) {
                 if let attachment {
@@ -222,6 +255,11 @@ struct EntryDetailView: View {
 
     // MARK: - Actions
 
+    /// 編集ガードは repository 層が強制する。UI は入口を隠すのみ。
+    private var canEdit: Bool {
+        !entry.isVoided && entry.relatedFixedAssetId == nil && closures.isEmpty
+    }
+
     private func voidEntry() {
         let reason = voidReason.trimmingCharacters(in: .whitespacesAndNewlines)
         let repository = SwiftDataExpenseRepository(context: context, deviceId: DeviceID.current)
@@ -249,6 +287,11 @@ struct EntryDetailView: View {
     private func accountLabel(_ code: String) -> String {
         let name = accounts.first { $0.code == code }?.nameJa ?? ""
         return name.isEmpty ? code : "\(code) \(name)"
+    }
+
+    private func lookupAccountName(_ code: String) -> String? {
+        let name = accounts.first { $0.code == code }?.nameJa
+        return (name?.isEmpty ?? true) ? nil : name
     }
 
 }
