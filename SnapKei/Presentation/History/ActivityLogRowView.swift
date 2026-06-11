@@ -42,10 +42,16 @@ struct ActivityLogRowView: View {
             afterData: log.afterSnapshot,
             accountName: accountName
         ) {
-            ForEach(changes, id: \.label) { change in
-                Text("\(change.label): \(change.old) → \(change.new)")
+            if changes.isEmpty {
+                Text("（変更なし）")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+            } else {
+                ForEach(changes, id: \.label) { change in
+                    Text("\(change.label): \(change.old) → \(change.new)")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
         } else {
             // スナップショット欠損・デコード不能（旧バージョン由来など）の降級表示。
