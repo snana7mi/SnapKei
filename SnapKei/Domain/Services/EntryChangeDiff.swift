@@ -3,8 +3,9 @@ import Foundation
 /// 訂正履歴の before/after スナップショットからフィールド級の差分を導く（決定的・副作用なし、MainActor 隔離）。
 /// EntryDetailView（変更履歴）と ActivityLogView（訂正・削除履歴）が共用する。
 /// 優良電子帳簿の「訂正・削除の事実と内容が確認できること」の表示部分を担う。
-nonisolated public enum EntryChangeDiff {
-    public struct FieldChange: Equatable, Sendable {
+public enum EntryChangeDiff {
+    // 値型は隔離なしで運べるよう nonisolated（メソッド側は @MainActor — 型宣言で偽らない）。
+    nonisolated public struct FieldChange: Equatable, Sendable {
         public let label: String
         public let old: String
         public let new: String
