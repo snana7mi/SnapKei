@@ -268,6 +268,105 @@ struct ExpenseRepositoryLockTests {
     }
 }
 
+@Suite("ExpenseRepository — edit guards", .serialized)
+struct ExpenseRepositoryEditGuardTests {
+
+    @MainActor
+    private func makeRepo() throws -> (SwiftDataExpenseRepository, ModelContext) {
+        let container = try SnapKeiModelContainer.inMemory()
+        TestContainerRetainer.retain(container)
+        AccountSeeder.seedIfNeeded(context: container.mainContext)
+        let repo = SwiftDataExpenseRepository(context: container.mainContext, deviceId: "test-device")
+        return (repo, container.mainContext)
+    }
+
+    private func makeEntry(year: Int = 2026, amount: Int = 1100) -> JournalEntry {
+        JournalEntry(
+            entryNumber: 0,
+            fiscalYear: year,
+            transactionDate: Date(),
+            debitAccountCode: "5110",
+            creditAccountCode: "3210",
+            amountIncludingTax: amount,
+            amountExcludingTax: 1000,
+            consumptionTax: 100,
+            taxCategory: .standard10,
+            priceEntryMode: .taxIncluded,
+            paymentMethod: .ownerLoan,
+            counterpartyName: "テスト商店",
+            transactionDescription: "テスト取引",
+            sourceType: .manual
+        )
+    }
+
+    @MainActor
+    @Test func edit_voidedEntry_throwsEntryVoided() throws {
+        let (repo, _) = try makeRepo()
+        let entry = makeEntry()
+        try repo.create(entry, reason: nil)
+        try repo.void(entry, reason: nil)
+
+        #expect(throws: RepositoryError.entryVoided) {
+            try repo.edit(entry, applying: { entry.counterpartyName = "変更" }, reason: nil)
+        }
+        // ガードで弾かれた場合 applying は実行されないこと
+        #expect(entry.counterpartyName == "テスト商店")
+    }
+
+    @MainActor
+    @Test func edit_assetLinkedEntry_throwsAssetLinked() throws {
+        let (repo, _) = try makeRepo()
+        let entry = makeEntry()
+        entry.relatedFixedAssetId = UUID()
+        try repo.create(entry, reason: nil)
+
+        #expect(throws: RepositoryError.assetLinked) {
+            try repo.edit(entry, applying: { entry.counterpartyName = "変更" }, reason: nil)
+        }
+    }
+
+    @MainActor
+    @Test func edit_closedFiscalYear_throwsFiscalYearClosed() throws {
+        let (repo, ctx) = try makeRepo()
+        let entry = makeEntry(year: 2026)
+        try repo.create(entry, reason: nil)
+        ctx.insert(FiscalYearClosure(fiscalYear: 2026, netIncomeAtClosing: 0, closedByDeviceId: "test-device"))
+        try ctx.save()
+
+        #expect(throws: RepositoryError.fiscalYearClosed(2026)) {
+            try repo.edit(entry, applying: { entry.counterpartyName = "変更" }, reason: nil)
+        }
+    }
+
+    @MainActor
+    @Test func edit_recordsBeforeAndAfterSnapshots_withReason() throws {
+        let (repo, ctx) = try makeRepo()
+        let entry = makeEntry(amount: 880)
+        try repo.create(entry, reason: nil)
+        let beforeUpdatedAt = entry.updatedAt
+
+        try repo.edit(entry, applying: {
+            entry.amountIncludingTax = 980
+            entry.counterpartyName = "コンビニ"
+        }, reason: "金額誤記")
+
+        let logs = try ctx.fetch(FetchDescriptor<SystemActivityLog>())
+        let editLog = try #require(logs.first { $0.activityType == .editEntry })
+        #expect(editLog.targetEntryId == entry.id)
+        #expect(editLog.reason == "金額誤記")
+
+        let before = try JSONDecoder().decode(
+            JournalEntrySnapshot.self, from: try #require(editLog.beforeSnapshot))
+        let after = try JSONDecoder().decode(
+            JournalEntrySnapshot.self, from: try #require(editLog.afterSnapshot))
+        #expect(before.amountIncludingTax == 880)
+        #expect(before.counterpartyName == "テスト商店")
+        #expect(after.amountIncludingTax == 980)
+        #expect(after.counterpartyName == "コンビニ")
+        #expect(entry.updatedAt > beforeUpdatedAt)
+    }
+}
+
 @Suite("ExpenseRepository — search", .serialized)
 struct ExpenseRepositorySearchTests {
 

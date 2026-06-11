@@ -43,11 +43,17 @@ public struct ExpenseSearchCriteria: Sendable {
 
 public enum RepositoryError: Error, Equatable, LocalizedError {
     case fiscalYearClosed(Int)
+    case entryVoided
+    case assetLinked
 
     public var errorDescription: String? {
         switch self {
         case .fiscalYearClosed(let year):
             "\(year)年度は締め済みのため記帳できません。設定の年度管理から再開後にやり直してください。"
+        case .entryVoided:
+            "取消済の仕訳は編集できません。"
+        case .assetLinked:
+            "固定資産に関連する仕訳は編集できません。設定の固定資産台帳から資産の削除・処分を行ってください。"
         }
     }
 }
@@ -95,6 +101,10 @@ public final class SwiftDataExpenseRepository: ExpenseRepository, @unchecked Sen
 
     public func edit(_ entry: JournalEntry, applying change: () -> Void, reason: String?) throws {
         try ensureFiscalYearOpen(entry.fiscalYear)
+        // 取消済みは編集不可（取消の取り消しは別概念）。資産関連仕訳は
+        // FixedAssetService が全権管理する（取得・償却・転出の整合が崩れるため）。
+        guard !entry.isVoided else { throw RepositoryError.entryVoided }
+        guard entry.relatedFixedAssetId == nil else { throw RepositoryError.assetLinked }
         let before = try? JSONEncoder().encode(JournalEntrySnapshot(from: entry))
         change()
         entry.updatedAt = Date()
