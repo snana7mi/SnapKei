@@ -39,9 +39,9 @@ struct EntryDetailView: View {
                     row("税込金額", YenFormat.string(entry.amountIncludingTax))
                     row("税抜金額", YenFormat.string(entry.amountExcludingTax))
                     row("消費税", YenFormat.string(entry.consumptionTax))
-                    row("税区分", taxCategoryLabel)
-                    row("入力方式", entry.priceEntryModeRaw == PriceEntryMode.taxExcluded.rawValue ? "税抜" : "税込")
-                    row("支払方法", paymentMethodLabel)
+                    row("税区分", entry.taxCategory.labelJa)
+                    row("入力方式", entry.priceEntryMode.labelJa)
+                    row("支払方法", entry.paymentMethod.labelJa)
                     if entry.businessAllocationRate < 1 {
                         row("事業割合", "\(Int((entry.businessAllocationRate * 100).rounded()))%")
                         if let original = entry.originalAmountIncludingTax {
@@ -65,7 +65,7 @@ struct EntryDetailView: View {
                 receiptSection
 
                 Section("ステータス") {
-                    row("記帳種別", sourceTypeLabel)
+                    row("記帳種別", entry.sourceType.labelJa)
                     row("入力日", entry.inputDate.formatted(date: .numeric, time: .shortened))
                     if entry.isLateEntry {
                         Label("スキャナ保存期限後の入力（遅延）", systemImage: "clock.badge.exclamationmark")
@@ -251,37 +251,6 @@ struct EntryDetailView: View {
         return name.isEmpty ? code : "\(code) \(name)"
     }
 
-    private var taxCategoryLabel: String {
-        switch TaxCategory(rawValue: entry.taxCategoryRaw) {
-        case .standard10: "10%"
-        case .reduced8: "8% 軽減"
-        case .nonTaxable: "非課税"
-        case .outOfScope, .none: "対象外"
-        }
-    }
-
-    private var paymentMethodLabel: String {
-        switch PaymentMethod(rawValue: entry.paymentMethodRaw) {
-        case .cash: "現金"
-        case .creditCard: "クレジット"
-        case .bankTransfer: "銀行振込"
-        case .ownerLoan: "事業主借"
-        case .ownerWithdraw: "事業主貸"
-        case .accountsPayable: "未払金"
-        case .other, .none: "その他"
-        }
-    }
-
-    private var sourceTypeLabel: String {
-        switch RecordSource(rawValue: entry.sourceTypeRaw) {
-        case .aiParsed: "AI解析（レシート撮影）"
-        case .electronicTransaction: "電子取引（PDF取込）"
-        case .manual: "手動入力"
-        case .imported: "インポート"
-        case .depreciation: "減価償却（自動）"
-        case .none: entry.sourceTypeRaw
-        }
-    }
 }
 
 /// 証憑のフルスクリーンビューア。画像は pinch zoom、PDF は PDFKit。
