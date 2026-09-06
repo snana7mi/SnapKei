@@ -1409,8 +1409,7 @@ Create `docs/legal/support.md`:
 
 ## お問い合わせ
 
-- 不具合報告・機能要望: GitHub Issues（リポジトリ公開後）
-- メール: 
+- 不具合報告・機能要望: GitHub Issues
 
 ## よくある質問
 
